@@ -266,7 +266,7 @@ def refine(
     Args:
         row:          A single row from the hybrid_search DataFrame.
         query:        The original search query string.
-        bundle:       Loaded :class:`~videorag.embeddings.ModelBundle`.
+        bundle:       Loaded :class:`~videorag.models.embeddings.ModelBundle`.
         settings:     Project settings.
         video_root:   Root directory containing video files.
         subtitle_root: Root directory containing subtitle files.

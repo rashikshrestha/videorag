@@ -1,5 +1,5 @@
 """
-videorag.index
+videorag.store.index
 ~~~~~~~~~~~~~~
 FAISS index construction, persistence and loading.
 
@@ -94,9 +94,9 @@ def build_or_load_indices(
     disk and loaded back.
 
     Args:
-        segments_df: DataFrame produced by :func:`~videorag.preprocessing.run_preprocessing`.
+        segments_df: DataFrame produced by :func:`~videorag.data.preprocessing.run_preprocessing`.
         settings:    Project :class:`~videorag.config.Settings`.
-        bundle:      Loaded :class:`~videorag.embeddings.ModelBundle`.
+        bundle:      Loaded :class:`~videorag.models.embeddings.ModelBundle`.
 
     Returns:
         Tuple of ``(text_index, image_index, text_embeddings, image_embeddings)``.

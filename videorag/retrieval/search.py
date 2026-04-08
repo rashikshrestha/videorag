@@ -1,5 +1,5 @@
 """
-videorag.retrieval
+videorag.retrieval.search
 ~~~~~~~~~~~~~~~~~~
 Dual-index FAISS retrieval with adaptive fusion and character boosting.
 
@@ -60,7 +60,7 @@ def hybrid_search(
         segments_df:  Full segments DataFrame (output of preprocessing).
         text_index:   FAISS index over text embeddings.
         image_index:  FAISS index over image embeddings.
-        bundle:       Loaded :class:`~videorag.embeddings.ModelBundle`.
+        bundle:       Loaded :class:`~videorag.models.embeddings.ModelBundle`.
         settings:     Project settings.
         top_k:        Number of candidates to return.
 

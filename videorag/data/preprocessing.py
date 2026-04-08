@@ -30,10 +30,6 @@ def find_subtitle(
     1. Exact stem match  (``<subtitle_root>/<stem>.srt|ass|ssa``)
     2. Fuzzy match       (normalised names, substring containment)
 
-    BUG FIX #9: original code failed when called with a bare filename
-    because the implicit Path join produced wrong results.  This version
-    accepts both a bare name and a full path and adds fuzzy fallback.
-
     Returns ``None`` when no subtitle file can be found.
     """
     stem = Path(video_path).stem

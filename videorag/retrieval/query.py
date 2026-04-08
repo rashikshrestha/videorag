@@ -1,5 +1,5 @@
 """
-videorag.query
+videorag.retrieval.query
 ~~~~~~~~~~~~~~
 Query classification, embedding and scoring utilities.
 

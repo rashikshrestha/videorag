@@ -18,7 +18,7 @@ import pandas as pd
 from videorag.config import Settings, load_settings
 from videorag.models.embeddings import load_models
 from videorag.store.index import build_or_load_indices
-from videorag.pipeline.pipeline import VideoRAGContext, fmt, ground
+from videorag.pipeline.pipeline import VideoRAGContext, ground
 
 
 # ---------------------------------------------------------------------------
@@ -28,16 +28,16 @@ from videorag.pipeline.pipeline import VideoRAGContext, fmt, ground
 def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     """
     Load settings, models and FAISS indices; return a ready-to-use
-    :class:`~videorag.pipeline.VideoRAGContext`.
+    :class:`~videorag.pipeline.pipeline.VideoRAGContext`.
 
     This function performs the following steps:
 
     1. Parse ``config.yaml`` via :func:`~videorag.config.load_settings`.
-    2. Load text and CLIP models via :func:`~videorag.embeddings.load_models`.
+    2. Load text and CLIP models via :func:`~videorag.models.embeddings.load_models`.
     3. Read ``<output_root>/segments.csv`` (must exist; run preprocessing
        first if needed).
-    4. Build or load FAISS indices via
-       :func:`~videorag.index.build_or_load_indices`.
+     4. Build or load FAISS indices via
+         :func:`~videorag.store.index.build_or_load_indices`.
 
     Args:
         config_path: Path to the project ``config.yaml``.
@@ -108,7 +108,7 @@ def run_video_grounding(
 
     Args:
         query:       Natural-language description of the video moment.
-        ctx:         Pre-built :class:`~videorag.pipeline.VideoRAGContext`.
+        ctx:         Pre-built :class:`~videorag.pipeline.pipeline.VideoRAGContext`.
                      If ``None``, built from *config_path*.
         config_path: Path to ``config.yaml`` (used only when ``ctx`` is None).
         top_k:       Number of retrieval candidates.

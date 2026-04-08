@@ -1,5 +1,5 @@
 """
-videorag.embeddings
+videorag.models.embeddings
 ~~~~~~~~~~~~~~~~~~~
 Model loading, frame embedding and bulk embedding generation.
 

@@ -16,7 +16,8 @@ from typing import Optional
 
 import pandas as pd
 
-from videorag.pipeline.pipeline import VideoRAGContext, fmt, ground
+from videorag.pipeline.pipeline import VideoRAGContext, ground
+from videorag.utils.time import fmt_time
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +194,7 @@ def evaluate_grounding(
 
     Args:
         gold_df:   DataFrame with columns: query, video, gt_start, gt_end, type.
-        ctx:       Runtime :class:`~videorag.pipeline.VideoRAGContext`.
+        ctx:       Runtime :class:`~videorag.pipeline.pipeline.VideoRAGContext`.
         top_k:     Retrieval candidates per query.
         merge_gap: Span merging gap (seconds).
         save_dir:  If given, save ``evaluation_final.csv`` to this directory.
@@ -231,16 +232,16 @@ def evaluate_grounding(
                 )
                 if c_iou > best_iou_k:
                     best_iou_k  = c_iou
-                    best_pred_k = fmt(c["refined_start"]) + " -> " + fmt(c["refined_end"])
+                    best_pred_k = fmt_time(c["refined_start"]) + " -> " + fmt_time(c["refined_end"])
 
         eval_rows.append(
             {
                 "query":        g["query"][:55],
                 "type":         g.get("type", top1["query_type"]),
                 "gt_video":     g["video"],
-                "gt":           fmt(g["gt_start"]) + " -> " + fmt(g["gt_end"]),
+                "gt":           fmt_time(g["gt_start"]) + " -> " + fmt_time(g["gt_end"]),
                 "gt_span":      g["gt_end"] - g["gt_start"],
-                "pred":         fmt(top1["refined_start"]) + " -> " + fmt(top1["refined_end"]),
+                "pred":         fmt_time(top1["refined_start"]) + " -> " + fmt_time(top1["refined_end"]),
                 "pred_span":    top1["span_seconds"],
                 "top1_video":   top1["video"],
                 "top1_correct": t1_ok,

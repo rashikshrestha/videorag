@@ -25,6 +25,7 @@ from videorag.models.embeddings import ModelBundle
 from videorag.retrieval.query import _kw_overlap
 from videorag.retrieval.refinement import refine
 from videorag.retrieval.search import hybrid_search
+from videorag.utils.time import fmt_time
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ class VideoRAGContext:
 
     Attributes:
         settings:         Project :class:`~videorag.config.Settings`.
-        bundle:           Loaded :class:`~videorag.embeddings.ModelBundle`.
+        bundle:           Loaded :class:`~videorag.models.embeddings.ModelBundle`.
         segments_df:      Full segments DataFrame (from preprocessing).
         text_index:       FAISS index over text embeddings.
         image_index:      FAISS index over image embeddings.
@@ -63,8 +64,7 @@ class VideoRAGContext:
 
 def fmt(sec: float) -> str:
     """Format *sec* seconds as ``"MM:SS.ss"``."""
-    m, s = divmod(float(sec), 60.0)
-    return f"{int(m):02d}:{s:05.2f}"
+    return fmt_time(sec)
 
 
 def calibrate(raw: float, floor: float, ceiling: float) -> float:
