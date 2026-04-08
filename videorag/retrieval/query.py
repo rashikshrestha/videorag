@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from videorag.config import Settings
-from videorag.models.embeddings import ModelBundle
+from videorag.models.embeddings import ModelBundle, embed_audio_query_text
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ _DIALOGUE_VOCAB = frozenset({
 def classify_query(
     query: str,
     settings: Settings,
-) -> Tuple[str, float, float]:
+) -> Tuple[str, float, float, float]:
     """
     Classify *query* into one of ``'action'``, ``'dialogue'`` or ``'mixed'``
     and return the corresponding fusion weights.
@@ -111,7 +111,7 @@ def classify_query(
         label = "mixed"
 
     ws = settings.retrieval.weights[label]
-    return label, ws.text, ws.image
+    return label, ws.text, ws.image, ws.audio
 
 
 # ---------------------------------------------------------------------------
@@ -157,3 +157,8 @@ def embed_query_clip(query: str, bundle: ModelBundle) -> np.ndarray:
         feat = bundle.clip_model.text_projection(out.pooler_output)
         feat = feat / torch.norm(feat, dim=-1, keepdim=True)
     return feat.cpu().numpy().astype(np.float32)
+
+
+def embed_query_audio(query: str, bundle: ModelBundle) -> np.ndarray | None:
+    """Encode query text into CLAP text space for audio retrieval."""
+    return embed_audio_query_text(query, bundle)

@@ -91,9 +91,15 @@ def cmd_index(args: argparse.Namespace) -> None:
     if args.force:
         # Remove cached indices so they are rebuilt unconditionally
         index_dir = settings.paths.output_root / "indices"
-        stamp = index_dir / "segments_mtime.txt"
-        if stamp.exists():
-            stamp.write_text("")  # invalidate cache
+        manifest = index_dir / "index_manifest.json"
+        if manifest.exists():
+            manifest.unlink()
+        for p in [
+            index_dir / "audio_index.faiss",
+            index_dir / "audio_embeddings.npy",
+        ]:
+            if p.exists():
+                p.unlink()
         print("Forcing index rebuild…")
 
     bundle = load_models(settings)

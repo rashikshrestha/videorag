@@ -54,8 +54,10 @@ class VideoRAGContext:
     segments_df: pd.DataFrame
     text_index: faiss.IndexFlatIP
     image_index: faiss.IndexFlatIP
+    audio_index: Optional[faiss.IndexFlatIP]
     text_embeddings: np.ndarray
     image_embeddings: np.ndarray
+    audio_embeddings: Optional[np.ndarray]
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +220,7 @@ def ground(
         ctx.segments_df,
         ctx.text_index,
         ctx.image_index,
+        ctx.audio_index,
         ctx.bundle,
         settings,
         top_k=top_k,

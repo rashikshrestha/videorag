@@ -10,7 +10,7 @@ hybrid_search(query, segments_df, text_index, image_index, bundle,
 """
 from __future__ import annotations
 
-from typing import List
+from typing import Optional
 
 import faiss
 import numpy as np
@@ -22,6 +22,7 @@ from videorag.retrieval.query import (
     _kw_overlap,
     _safe_minmax,
     classify_query,
+    embed_query_audio,
     embed_query_clip,
     embed_query_text,
 )
@@ -32,6 +33,7 @@ def hybrid_search(
     segments_df: pd.DataFrame,
     text_index: faiss.IndexFlatIP,
     image_index: faiss.IndexFlatIP,
+    audio_index: Optional[faiss.IndexFlatIP],
     bundle: ModelBundle,
     settings: Settings,
     top_k: int = 10,
@@ -70,9 +72,10 @@ def hybrid_search(
         Sorted by hybrid_score descending.
     """
     n = len(segments_df)
-    qtype, alpha, beta = classify_query(query, settings)
+    qtype, alpha, beta, gamma = classify_query(query, settings)
     q_text = embed_query_text(query, bundle)
     q_clip = embed_query_clip(query, bundle)
+    q_audio = embed_query_audio(query, bundle) if audio_index is not None else None
 
     # ── Search both indices over the full corpus ──
     ts, ti = text_index.search(q_text, n)
@@ -88,9 +91,24 @@ def hybrid_search(
         [max(0.0, is_map.get(i, 0.0)) for i in range(n)], dtype=np.float32
     )
 
+    raw_a = np.zeros(n, dtype=np.float32)
+    if audio_index is not None and q_audio is not None:
+        as_, ai = audio_index.search(q_audio, n)
+        as_map = dict(zip(ai[0].tolist(), as_[0].tolist()))
+        raw_a = np.array(
+            [max(0.0, as_map.get(i, 0.0)) for i in range(n)], dtype=np.float32
+        )
+
     norm_t = _safe_minmax(raw_t)
     norm_i = _safe_minmax(raw_i)
-    fused = alpha * norm_t + beta * norm_i
+    norm_a = _safe_minmax(raw_a)
+    if audio_index is None or q_audio is None:
+        total = alpha + beta
+        alpha_adj = alpha / total if total > 1e-8 else 0.5
+        beta_adj = beta / total if total > 1e-8 else 0.5
+        fused = alpha_adj * norm_t + beta_adj * norm_i
+    else:
+        fused = alpha * norm_t + beta * norm_i + gamma * norm_a
 
     # ── Character boost ──
     q_lower = query.lower()
@@ -122,6 +140,7 @@ def hybrid_search(
                 "hybrid_score": float(fused[idx]),
                 "text_score":   float(norm_t[idx]),
                 "image_score":  float(norm_i[idx]),
+                "audio_score":  float(norm_a[idx]),
                 "query_type":   qtype,
             }
         )

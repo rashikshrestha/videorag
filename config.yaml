@@ -30,14 +30,17 @@ retrieval:
   # Fusion weights per query type (text_weight + image_weight = 1).
   weights:
     action:
-      text: 0.35
-      image: 0.65
+      text: 0.30
+      image: 0.50
+      audio: 0.20
     dialogue:
-      text: 0.80
+      text: 0.70
       image: 0.20
+      audio: 0.10
     mixed:
-      text: 0.55
-      image: 0.45
+      text: 0.45
+      image: 0.35
+      audio: 0.20
   # Character mention boost added to fused score per matched character.
   character_boost: 0.3
 
@@ -69,6 +72,32 @@ pipeline:
   hybrid_weight: 0.50
   grounding_weight: 0.40
   keyword_weight: 0.10
+
+audio:
+  # Enable audio extraction + audio-based retrieval/refinement.
+  enabled: true
+  # Audio sample rate used for extracted scene clips and model inference.
+  sample_rate: 16000
+  # Output directory (relative to output_root) for scene-level wav clips.
+  scene_audio_dir: "audio/scenes"
+  # CLAP-compatible model for audio/text shared embedding space.
+  model: "laion/clap-htsat-unfused"
+  # Number of top event labels to keep per scene.
+  top_k_events: 5
+  # Event prompts used for non-ASR sound cues.
+  event_labels:
+    - gunshot
+    - glass breaking
+    - scream
+    - explosion
+    - applause
+    - laughter
+    - door slam
+    - car horn
+    - footsteps
+    - sirens
+    - phone ringing
+    - dog barking
 
 characters:
   - ross

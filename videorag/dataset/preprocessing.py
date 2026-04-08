@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import warnings
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -16,6 +17,52 @@ from tqdm import tqdm
 from videorag.config import Settings
 
 warnings.filterwarnings("ignore")
+
+
+def _extract_scene_audio(
+    video_path: Path,
+    start: float,
+    end: float,
+    out_wav: Path,
+    sample_rate: int,
+) -> Optional[str]:
+    """
+    Extract mono wav audio for [start, end] using ffmpeg.
+
+    Returns output path as string on success, otherwise None.
+    """
+    if end <= start:
+        return None
+
+    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{start:.3f}",
+        "-to",
+        f"{end:.3f}",
+        "-i",
+        str(video_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        str(sample_rate),
+        "-c:a",
+        "pcm_s16le",
+        str(out_wav),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if proc.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 44:
+            return str(out_wav)
+    except Exception:
+        pass
+    return None
 
 
 
@@ -176,6 +223,9 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
     duration  : end − start (seconds)
     subtitle  : all subtitle lines overlapping the scene
     frames    : JSON list of absolute paths to the N extracted frame JPEGs
+    audio_path: absolute path to extracted scene-level wav clip
+    audio_events: JSON list of top-k sound events (filled at indexing step)
+    audio_event_text: whitespace-joined event labels (filled at indexing step)
 
     Args:
         settings: Project :class:`~videorag.config.Settings`.
@@ -191,6 +241,17 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
     subtitle_root = settings.paths.subtitle_root
     output_root = settings.paths.output_root
     output_root.mkdir(parents=True, exist_ok=True)
+    audio_enabled = bool(getattr(settings, "audio", None) and settings.audio.enabled)
+    audio_sample_rate = (
+        int(settings.audio.sample_rate)
+        if audio_enabled
+        else 16000
+    )
+    audio_base_dir = (
+        output_root / settings.audio.scene_audio_dir
+        if audio_enabled
+        else output_root / "audio" / "scenes"
+    )
 
     # ── Discover videos ──
     video_files = sorted(
@@ -229,6 +290,18 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
                 fractions=settings.preprocessing.frame_fractions,
             )
             text = get_subtitle_text(subs, start, end)
+
+            audio_path = ""
+            if audio_enabled:
+                wav_path = audio_base_dir / video_path.stem / f"{i}.wav"
+                audio_path = _extract_scene_audio(
+                    video_path=video_path,
+                    start=start,
+                    end=end,
+                    out_wav=wav_path,
+                    sample_rate=audio_sample_rate,
+                ) or ""
+
             rows.append(
                 {
                     "video": video_path.name,
@@ -238,6 +311,9 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
                     "duration": round(end - start, 3),
                     "subtitle": text,
                     "frames": json.dumps(frame_paths),
+                    "audio_path": audio_path,
+                    "audio_events": "[]",
+                    "audio_event_text": "",
                 }
             )
 

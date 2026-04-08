@@ -41,6 +41,7 @@ class ModelSettings:
 class WeightSet:
     text: float
     image: float
+    audio: float = 0.0
 
 
 @dataclass
@@ -49,6 +50,16 @@ class RetrievalSettings:
     merge_gap: float
     weights: dict              # {"action": WeightSet, "dialogue": WeightSet, "mixed": WeightSet}
     character_boost: float
+
+
+@dataclass
+class AudioSettings:
+    enabled: bool
+    sample_rate: int
+    scene_audio_dir: str
+    event_labels: List[str]
+    top_k_events: int
+    model: str
 
 
 @dataclass
@@ -78,6 +89,7 @@ class Settings:
     paths: PathSettings
     preprocessing: PreprocessingSettings
     models: ModelSettings
+    audio: AudioSettings
     retrieval: RetrievalSettings
     refinement: RefinementSettings
     pipeline: PipelineSettings
@@ -116,9 +128,38 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
     # ── Retrieval weights ──
     weights_raw = raw.get("retrieval", {}).get("weights", {})
     weights = {
-        qt: WeightSet(text=v["text"], image=v["image"])
+        qt: WeightSet(text=float(v["text"]), image=float(v["image"]), audio=float(v.get("audio", 0.0)))
         for qt, v in weights_raw.items()
     }
+
+    # Ensure all query types exist and weights are normalised.
+    for qt in ("action", "dialogue", "mixed"):
+        ws = weights.get(qt, WeightSet(text=0.5, image=0.5, audio=0.0))
+        total = float(ws.text + ws.image + ws.audio)
+        if total <= 1e-8:
+            weights[qt] = WeightSet(text=0.5, image=0.5, audio=0.0)
+        else:
+            weights[qt] = WeightSet(
+                text=float(ws.text / total),
+                image=float(ws.image / total),
+                audio=float(ws.audio / total),
+            )
+
+    audio_raw = raw.get("audio", {})
+    default_event_labels = [
+        "gunshot",
+        "glass breaking",
+        "scream",
+        "explosion",
+        "applause",
+        "laughter",
+        "door slam",
+        "car horn",
+        "footsteps",
+        "sirens",
+        "phone ringing",
+        "dog barking",
+    ]
 
     return Settings(
         paths=PathSettings(
@@ -136,6 +177,14 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
             clip_model=raw["models"]["clip_model"],
             device=device,
             text_embed_batch_size=raw["models"].get("text_embed_batch_size", 256),
+        ),
+        audio=AudioSettings(
+            enabled=bool(audio_raw.get("enabled", False)),
+            sample_rate=int(audio_raw.get("sample_rate", 16000)),
+            scene_audio_dir=str(audio_raw.get("scene_audio_dir", "audio/scenes")),
+            event_labels=[str(x) for x in audio_raw.get("event_labels", default_event_labels)],
+            top_k_events=int(audio_raw.get("top_k_events", 5)),
+            model=str(audio_raw.get("model", "laion/clap-htsat-unfused")),
         ),
         retrieval=RetrievalSettings(
             top_k=raw["retrieval"]["top_k"],

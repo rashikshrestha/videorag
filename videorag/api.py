@@ -62,6 +62,15 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     segments_df = pd.read_csv(seg_path)
     segments_df["subtitle"] = segments_df["subtitle"].fillna("").astype(str)
     segments_df["frames"]   = segments_df["frames"].fillna("[]").astype(str)
+    if "audio_path" not in segments_df.columns:
+        segments_df["audio_path"] = ""
+    if "audio_events" not in segments_df.columns:
+        segments_df["audio_events"] = "[]"
+    if "audio_event_text" not in segments_df.columns:
+        segments_df["audio_event_text"] = ""
+    segments_df["audio_path"] = segments_df["audio_path"].fillna("").astype(str)
+    segments_df["audio_events"] = segments_df["audio_events"].fillna("[]").astype(str)
+    segments_df["audio_event_text"] = segments_df["audio_event_text"].fillna("").astype(str)
 
     # BUG FIX #2: embed pure subtitle text (no episode/scene prefix noise)
     segments_df["embed_text"] = segments_df["subtitle"].apply(
@@ -73,7 +82,7 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     bundle = load_models(settings)
 
     # ── Build or load FAISS indices ──
-    text_index, image_index, text_emb, image_emb = build_or_load_indices(
+    text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df = build_or_load_indices(
         segments_df, settings, bundle
     )
 
@@ -83,8 +92,10 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
         segments_df=segments_df,
         text_index=text_index,
         image_index=image_index,
+        audio_index=audio_index,
         text_embeddings=text_emb,
         image_embeddings=image_emb,
+        audio_embeddings=audio_emb,
     )
 
 

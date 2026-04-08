@@ -18,6 +18,7 @@ refine(row, query, bundle, settings, video_root, subtitle_root)
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -30,7 +31,7 @@ from PIL import Image
 
 from videorag.config import Settings
 from videorag.models.embeddings import ModelBundle, _clip_single_frame
-from videorag.retrieval.query import _safe_minmax, classify_query, embed_query_text
+from videorag.retrieval.query import _safe_minmax, classify_query, embed_query_audio, embed_query_text
 
 
 # ---------------------------------------------------------------------------
@@ -281,13 +282,14 @@ def refine(
     dur      = get_duration(video, video_root)
     subs     = load_subs(video, video_root, subtitle_root)
 
-    qtype, alpha_s, beta_i = classify_query(query, settings)
+    qtype, alpha_s, beta_i, gamma_a = classify_query(query, settings)
     frame_agg = "max" if qtype == "action" else "mean"
 
     ref = settings.refinement
 
     # ── Query features (computed once per call) ──
     q_emb = embed_query_text(query, bundle)
+    q_aud = embed_query_audio(query, bundle) if settings.audio.enabled else None
 
     txt_inp = bundle.clip_processor(
         text=[query], return_tensors="pt", padding=True
@@ -349,7 +351,55 @@ def refine(
                     np.max(sims) if frame_agg == "max" else np.mean(sims)
                 )
 
-        bins.append({"b_s": b_s, "b_e": b_e, "s_raw": s_score, "i_raw": i_score})
+        # ── Audio score (non-ASR cues via CLAP text↔audio similarity) ──
+        a_score = 0.0
+        if (
+            q_aud is not None
+            and bundle.audio_model is not None
+            and bundle.audio_processor is not None
+            and settings.audio.enabled
+        ):
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-ss",
+                f"{b_s:.3f}",
+                "-to",
+                f"{b_e:.3f}",
+                "-i",
+                str(video_root / video),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                str(settings.audio.sample_rate),
+                "-f",
+                "f32le",
+                "pipe:1",
+            ]
+            try:
+                proc = subprocess.run(cmd, capture_output=True, check=False)
+                if proc.returncode == 0 and proc.stdout:
+                    wav = np.frombuffer(proc.stdout, dtype=np.float32)
+                    if wav.size > 0:
+                        inp = bundle.audio_processor(
+                            audios=[wav],
+                            sampling_rate=settings.audio.sample_rate,
+                            return_tensors="pt",
+                        )
+                        with torch.no_grad():
+                            af = bundle.audio_model.get_audio_features(
+                                input_features=inp["input_features"].to(bundle.device),
+                            )
+                            af = af / torch.norm(af, dim=-1, keepdim=True)
+                        av = af.detach().cpu().numpy()
+                        a_score = max(0.0, float((av @ q_aud.T)[0, 0]))
+            except Exception:
+                a_score = 0.0
+
+        bins.append({"b_s": b_s, "b_e": b_e, "s_raw": s_score, "i_raw": i_score, "a_raw": a_score})
         t += ref.stride
 
     cap.release()
@@ -363,7 +413,18 @@ def refine(
     # ── Normalise within window then fuse ──
     bdf["s_norm"]    = _safe_minmax(bdf["s_raw"].values)
     bdf["i_norm"]    = _safe_minmax(bdf["i_raw"].values)
-    bdf["score_raw"] = alpha_s * bdf["s_norm"] + beta_i * bdf["i_norm"]
+    bdf["a_norm"]    = _safe_minmax(bdf["a_raw"].values)
+    if q_aud is None:
+        total = alpha_s + beta_i
+        alpha_adj = alpha_s / total if total > 1e-8 else 0.5
+        beta_adj = beta_i / total if total > 1e-8 else 0.5
+        bdf["score_raw"] = alpha_adj * bdf["s_norm"] + beta_adj * bdf["i_norm"]
+    else:
+        bdf["score_raw"] = (
+            alpha_s * bdf["s_norm"]
+            + beta_i * bdf["i_norm"]
+            + gamma_a * bdf["a_norm"]
+        )
     bdf["score"]     = smooth_scores(bdf["score_raw"].values, window=ref.smooth_window)
 
     # ── Peak expansion ──
