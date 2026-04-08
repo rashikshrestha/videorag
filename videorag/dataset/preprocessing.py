@@ -377,8 +377,24 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
         )
         print(f"  {v.name:50s}  subtitle={'YES' if sub else 'MISSING'}")
 
-    # ── Build segments DataFrame ──
-    rows = []
+    # ── Build segments CSV incrementally (flush after each video) ──
+    segments_path = output_root / "segments.csv"
+    columns = [
+        "video",
+        "scene_id",
+        "start",
+        "end",
+        "duration",
+        "subtitle",
+        "frames",
+        "audio_path",
+        "audio_events",
+        "audio_event_text",
+    ]
+    wrote_header = False
+    if segments_path.exists():
+        segments_path.unlink()
+
     for video_path in tqdm(video_files, desc="Preprocessing"):
         sub_path = find_subtitle(
             video_path,
@@ -394,7 +410,13 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
             f"subtitle={'yes' if subs else 'NO'}"
         )
 
-        for i, (start, end) in enumerate(scenes):
+        video_rows = []
+        for i, (start, end) in tqdm(
+            enumerate(scenes),
+            total=len(scenes),
+            desc=f"Scenes [{video_path.stem}]",
+            leave=False,
+        ):
             frame_dir = output_root / "frames" / video_path.stem / str(i)
             frame_paths = extract_keyframes(
                 video_path,
@@ -416,7 +438,7 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
                     sample_rate=audio_sample_rate,
                 ) or ""
 
-            rows.append(
+            video_rows.append(
                 {
                     "video": video_path.name,
                     "scene_id": i,
@@ -431,9 +453,21 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
                 }
             )
 
-    df = pd.DataFrame(rows)
-    segments_path = output_root / "segments.csv"
-    df.to_csv(segments_path, index=False)
+        if video_rows:
+            video_df = pd.DataFrame(video_rows, columns=columns)
+            video_df.to_csv(
+                segments_path,
+                mode="a",
+                header=not wrote_header,
+                index=False,
+            )
+            wrote_header = True
+            print(f"    ↳ saved {len(video_rows)} scene rows to {segments_path}")
+
+    if segments_path.exists():
+        df = pd.read_csv(segments_path)
+    else:
+        df = pd.DataFrame(columns=columns)
 
     frame_counts = df["frames"].apply(lambda x: len(json.loads(x)))
     print(f"\n✅ {len(df)} segments saved → {segments_path}")

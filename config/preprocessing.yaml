@@ -11,3 +11,29 @@ preprocessing:
   frame_fractions: [0.10, 0.30, 0.50, 0.70, 0.90]
   # SceneDetect ContentDetector threshold (lower = more sensitive).
   scene_threshold: 27
+
+audio:
+  # Enable audio extraction + audio-based retrieval/refinement.
+  enabled: true
+  # Audio sample rate used for extracted scene clips and model inference.
+  sample_rate: 16000
+  # Output directory (relative to output_root) for scene-level wav clips.
+  scene_audio_dir: "audio"
+  # CLAP-compatible model for audio/text shared embedding space.
+  model: "laion/clap-htsat-unfused"
+  # Number of top event labels to keep per scene.
+  top_k_events: 5
+  # Event prompts used for non-ASR sound cues.
+  event_labels:
+    - gunshot
+    - glass breaking
+    - scream
+    - explosion
+    - applause
+    - laughter
+    - door slam
+    - car horn
+    - footsteps
+    - sirens
+    - phone ringing
+    - dog barking
