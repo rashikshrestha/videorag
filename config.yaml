@@ -1,0 +1,89 @@
+paths:
+  # Paths to video files, subtitle files, and output directory.
+  # Use absolute paths or paths relative to the project root.
+  video_root: "data/videos"
+  subtitle_root: "data/subtitles"
+  output_root: "data/output"
+
+preprocessing:
+  # Number of frames to extract per scene (spread across the scene).
+  n_frames: 5
+  # Fractions of the scene duration at which to sample frames.
+  # Avoids 0.0 and 1.0 which often land on scene-cut black frames.
+  frame_fractions: [0.10, 0.30, 0.50, 0.70, 0.90]
+  # SceneDetect ContentDetector threshold (lower = more sensitive).
+  scene_threshold: 27
+
+models:
+  text_model: "sentence-transformers/all-MiniLM-L6-v2"
+  clip_model: "openai/clip-vit-base-patch32"
+  # "auto" selects CUDA if available, else CPU.
+  device: "auto"
+  # Batch size for text embedding generation.
+  text_embed_batch_size: 256
+
+retrieval:
+  # Default number of candidate scenes to retrieve before refinement.
+  top_k: 10
+  # Maximum gap (seconds) between two spans to merge them into one.
+  merge_gap: 20.0
+  # Fusion weights per query type (text_weight + image_weight = 1).
+  weights:
+    action:
+      text: 0.35
+      image: 0.65
+    dialogue:
+      text: 0.80
+      image: 0.20
+    mixed:
+      text: 0.55
+      image: 0.45
+  # Character mention boost added to fused score per matched character.
+  character_boost: 0.3
+
+refinement:
+  # How far (seconds) to extend the search window beyond the scene boundary.
+  expand: 15.0
+  # Width of each scoring bin (seconds).
+  bin_size: 2.0
+  # Stride between consecutive bins (seconds).
+  stride: 0.5
+  # Minimum output span length (seconds).
+  min_span: 10.0
+  # Maximum output span length (seconds).
+  max_span: 35.0
+  # Number of frames to sample per bin for visual scoring.
+  bin_frames: 3
+  # Window size for temporal score smoothing.
+  smooth_window: 5
+  # Subtitle boundary snap tolerance (seconds).
+  snap_tolerance: 3.0
+  # Max extra distance (seconds) to search for keyword-matching subtitles.
+  expand_max_extra: 8.0
+
+pipeline:
+  # Confidence calibration: scores below floor → 0%, above ceiling → 100%.
+  calibrate_floor: 0.10
+  calibrate_ceiling: 0.70
+  # Score fusion weights for final ranking.
+  hybrid_weight: 0.50
+  grounding_weight: 0.40
+  keyword_weight: 0.10
+
+characters:
+  - ross
+  - rachel
+  - monica
+  - chandler
+  - joey
+  - phoebe
+  - janice
+  - alan
+  - angela
+  - barry
+  - carol
+  - susan
+  - ben
+  - gunther
+  - richard
+  - paolo
