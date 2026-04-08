@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import subprocess
 import warnings
 from pathlib import Path
@@ -17,6 +19,27 @@ from tqdm import tqdm
 from videorag.config import Settings
 
 warnings.filterwarnings("ignore")
+
+
+@contextlib.contextmanager
+def _suppress_native_stderr():
+    """
+    Temporarily silence native stderr (C/C++ libs like FFmpeg via OpenCV).
+
+    Useful for noisy, recoverable decoder warnings that otherwise flood logs.
+    """
+    try:
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        stderr_fd = os.dup(2)
+        os.dup2(devnull_fd, 2)
+        yield
+    finally:
+        try:
+            os.dup2(stderr_fd, 2)
+            os.close(stderr_fd)
+            os.close(devnull_fd)
+        except Exception:
+            pass
 
 
 def _extract_embedded_subtitle(
@@ -127,7 +150,7 @@ def _extract_scene_audio(
 
 def find_subtitle(
     video_path: Path | str,
-    subtitle_root: Path | str,
+    subtitle_root: Path | str | None,
     try_embedded: bool = True,
     embedded_cache_dir: Path | str | None = None,
 ) -> Optional[Path]:
@@ -145,9 +168,12 @@ def find_subtitle(
     """
     video_path = Path(video_path)
     stem = video_path.stem
-    subtitle_root = Path(subtitle_root)
+    subtitle_root_path = Path(subtitle_root) if subtitle_root is not None else None
 
-    search_roots = [subtitle_root, video_path.parent]
+    search_roots = [video_path.parent]
+    if subtitle_root_path is not None:
+        search_roots.insert(0, subtitle_root_path)
+
     for root in search_roots:
         for ext in (".srt", ".ass", ".ssa"):
             candidate = root / f"{stem}{ext}"
@@ -156,11 +182,12 @@ def find_subtitle(
 
     # Fuzzy: normalise both names and check substring containment.
     norm = stem.lower().replace("_", "").replace("-", "").replace(".", "")
-    for f in subtitle_root.iterdir():
-        if f.suffix.lower() in (".srt", ".ass", ".ssa"):
-            fn = f.stem.lower().replace("_", "").replace("-", "").replace(".", "")
-            if norm in fn or fn in norm:
-                return f
+    if subtitle_root_path is not None and subtitle_root_path.exists():
+        for f in subtitle_root_path.iterdir():
+            if f.suffix.lower() in (".srt", ".ass", ".ssa"):
+                fn = f.stem.lower().replace("_", "").replace("-", "").replace(".", "")
+                if norm in fn or fn in norm:
+                    return f
 
     if try_embedded:
         cache_dir = (
@@ -188,10 +215,11 @@ def detect_scenes(
     Returns:
         List of ``(start_sec, end_sec)`` tuples, one per detected scene.
     """
-    video = open_video(str(video_path))
-    manager = SceneManager()
-    manager.add_detector(ContentDetector(threshold=threshold))
-    manager.detect_scenes(video)
+    with _suppress_native_stderr():
+        video = open_video(str(video_path))
+        manager = SceneManager()
+        manager.add_detector(ContentDetector(threshold=threshold))
+        manager.detect_scenes(video)
     return [
         (s[0].get_seconds(), s[1].get_seconds())
         for s in manager.get_scene_list()
@@ -235,21 +263,22 @@ def extract_keyframes(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cap = cv2.VideoCapture(str(video_path))
-    fps = cap.get(cv2.CAP_PROP_FPS)
     saved: List[str] = []
+    with _suppress_native_stderr():
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
 
-    if fps > 0:
-        for i, frac in enumerate(fractions):
-            t = start + frac * (end - start)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(t * fps))
-            ret, frame = cap.read()
-            if ret:
-                p = out_dir / f"f{i}.jpg"
-                cv2.imwrite(str(p), frame)
-                saved.append(str(p))
+        if fps > 0:
+            for i, frac in enumerate(fractions):
+                t = start + frac * (end - start)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, int(t * fps))
+                ret, frame = cap.read()
+                if ret:
+                    p = out_dir / f"f{i}.jpg"
+                    cv2.imwrite(str(p), frame)
+                    saved.append(str(p))
 
-    cap.release()
+        cap.release()
     return saved
 
 

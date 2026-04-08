@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import yaml
 
@@ -18,7 +18,7 @@ import yaml
 @dataclass
 class PathSettings:
     video_root: Path
-    subtitle_root: Path
+    subtitle_root: Optional[Path]
     output_root: Path
 
 
@@ -115,18 +115,33 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
         )
 
     with open(config_path, "r") as fh:
-        raw = yaml.safe_load(fh)
+        raw = yaml.safe_load(fh) or {}
+
+    paths_raw = raw.get("paths", {})
+    preprocessing_raw = raw.get("preprocessing", {})
+    models_raw = raw.get("models", {})
+    retrieval_raw = raw.get("retrieval", {})
+    refinement_raw = raw.get("refinement", {})
+    pipeline_raw = raw.get("pipeline", {})
 
     # ── Resolve device ──
-    import torch
-    device_cfg = raw.get("models", {}).get("device", "auto")
+    device_cfg = models_raw.get("device", "auto")
     if device_cfg == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
     else:
         device = device_cfg
 
     # ── Retrieval weights ──
-    weights_raw = raw.get("retrieval", {}).get("weights", {})
+    default_weights = {
+        "action": {"text": 0.30, "image": 0.50, "audio": 0.20},
+        "dialogue": {"text": 0.70, "image": 0.20, "audio": 0.10},
+        "mixed": {"text": 0.45, "image": 0.35, "audio": 0.20},
+    }
+    weights_raw = retrieval_raw.get("weights", default_weights)
     weights = {
         qt: WeightSet(text=float(v["text"]), image=float(v["image"]), audio=float(v.get("audio", 0.0)))
         for qt, v in weights_raw.items()
@@ -163,20 +178,24 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
 
     return Settings(
         paths=PathSettings(
-            video_root=Path(raw["paths"]["video_root"]),
-            subtitle_root=Path(raw["paths"]["subtitle_root"]),
-            output_root=Path(raw["paths"]["output_root"]),
+            video_root=Path(paths_raw.get("video_root", "data/videos")),
+            subtitle_root=(
+                Path(paths_raw.get("subtitle_root"))
+                if paths_raw.get("subtitle_root") is not None
+                else None
+            ),
+            output_root=Path(paths_raw.get("output_root", "data/output")),
         ),
         preprocessing=PreprocessingSettings(
-            n_frames=raw["preprocessing"]["n_frames"],
-            frame_fractions=raw["preprocessing"]["frame_fractions"],
-            scene_threshold=raw["preprocessing"]["scene_threshold"],
+            n_frames=int(preprocessing_raw.get("n_frames", 5)),
+            frame_fractions=[float(x) for x in preprocessing_raw.get("frame_fractions", [0.10, 0.30, 0.50, 0.70, 0.90])],
+            scene_threshold=int(preprocessing_raw.get("scene_threshold", 27)),
         ),
         models=ModelSettings(
-            text_model=raw["models"]["text_model"],
-            clip_model=raw["models"]["clip_model"],
+            text_model=models_raw.get("text_model", "sentence-transformers/all-MiniLM-L6-v2"),
+            clip_model=models_raw.get("clip_model", "openai/clip-vit-base-patch32"),
             device=device,
-            text_embed_batch_size=raw["models"].get("text_embed_batch_size", 256),
+            text_embed_batch_size=int(models_raw.get("text_embed_batch_size", 256)),
         ),
         audio=AudioSettings(
             enabled=bool(audio_raw.get("enabled", False)),
@@ -187,28 +206,28 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
             model=str(audio_raw.get("model", "laion/clap-htsat-unfused")),
         ),
         retrieval=RetrievalSettings(
-            top_k=raw["retrieval"]["top_k"],
-            merge_gap=float(raw["retrieval"]["merge_gap"]),
+            top_k=int(retrieval_raw.get("top_k", 10)),
+            merge_gap=float(retrieval_raw.get("merge_gap", 20.0)),
             weights=weights,
-            character_boost=float(raw["retrieval"]["character_boost"]),
+            character_boost=float(retrieval_raw.get("character_boost", 0.3)),
         ),
         refinement=RefinementSettings(
-            expand=float(raw["refinement"]["expand"]),
-            bin_size=float(raw["refinement"]["bin_size"]),
-            stride=float(raw["refinement"]["stride"]),
-            min_span=float(raw["refinement"]["min_span"]),
-            max_span=float(raw["refinement"]["max_span"]),
-            bin_frames=int(raw["refinement"]["bin_frames"]),
-            smooth_window=int(raw["refinement"]["smooth_window"]),
-            snap_tolerance=float(raw["refinement"]["snap_tolerance"]),
-            expand_max_extra=float(raw["refinement"]["expand_max_extra"]),
+            expand=float(refinement_raw.get("expand", 15.0)),
+            bin_size=float(refinement_raw.get("bin_size", 2.0)),
+            stride=float(refinement_raw.get("stride", 0.5)),
+            min_span=float(refinement_raw.get("min_span", 10.0)),
+            max_span=float(refinement_raw.get("max_span", 35.0)),
+            bin_frames=int(refinement_raw.get("bin_frames", 3)),
+            smooth_window=int(refinement_raw.get("smooth_window", 5)),
+            snap_tolerance=float(refinement_raw.get("snap_tolerance", 3.0)),
+            expand_max_extra=float(refinement_raw.get("expand_max_extra", 8.0)),
         ),
         pipeline=PipelineSettings(
-            calibrate_floor=float(raw["pipeline"]["calibrate_floor"]),
-            calibrate_ceiling=float(raw["pipeline"]["calibrate_ceiling"]),
-            hybrid_weight=float(raw["pipeline"]["hybrid_weight"]),
-            grounding_weight=float(raw["pipeline"]["grounding_weight"]),
-            keyword_weight=float(raw["pipeline"]["keyword_weight"]),
+            calibrate_floor=float(pipeline_raw.get("calibrate_floor", 0.10)),
+            calibrate_ceiling=float(pipeline_raw.get("calibrate_ceiling", 0.70)),
+            hybrid_weight=float(pipeline_raw.get("hybrid_weight", 0.50)),
+            grounding_weight=float(pipeline_raw.get("grounding_weight", 0.40)),
+            keyword_weight=float(pipeline_raw.get("keyword_weight", 0.10)),
         ),
         characters=[str(c) for c in raw.get("characters", [])],
     )

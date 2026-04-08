@@ -54,7 +54,7 @@ def _clear_caches() -> None:
 def load_subs(
     video_name: str,
     video_root: Path,
-    subtitle_root: Path,
+    subtitle_root: Path | None,
 ) -> Optional[pysubs2.SSAFile]:
     """
     Return a cached pysubs2 subtitle file for *video_name*, or ``None``.
