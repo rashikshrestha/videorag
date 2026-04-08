@@ -1,16 +1,3 @@
-"""
-videorag.preprocessing
-~~~~~~~~~~~~~~~~~~~~~~
-Scene detection, multi-frame extraction and subtitle matching.
-
-Public API
-----------
-find_subtitle(video_path, subtitle_root) -> Path | None
-detect_scenes(video_path, threshold)     -> list[tuple[float, float]]
-extract_keyframes(video_path, start, end, out_dir, fractions) -> list[str]
-get_subtitle_text(subs, start, end)      -> str
-run_preprocessing(settings)              -> pd.DataFrame
-"""
 from __future__ import annotations
 
 import json
@@ -31,9 +18,6 @@ from videorag.config import Settings
 warnings.filterwarnings("ignore")
 
 
-# ---------------------------------------------------------------------------
-# Subtitle matching
-# ---------------------------------------------------------------------------
 
 def find_subtitle(
     video_path: Path | str,
@@ -71,10 +55,6 @@ def find_subtitle(
     return None
 
 
-# ---------------------------------------------------------------------------
-# Scene detection
-# ---------------------------------------------------------------------------
-
 def detect_scenes(
     video_path: Path | str,
     threshold: int = 27,
@@ -99,10 +79,6 @@ def detect_scenes(
         for s in manager.get_scene_list()
     ]
 
-
-# ---------------------------------------------------------------------------
-# Keyframe extraction
-# ---------------------------------------------------------------------------
 
 def extract_keyframes(
     video_path: Path | str,
@@ -159,10 +135,6 @@ def extract_keyframes(
     return saved
 
 
-# ---------------------------------------------------------------------------
-# Subtitle extraction helper
-# ---------------------------------------------------------------------------
-
 def get_subtitle_text(
     subs: Optional[pysubs2.SSAFile],
     start: float,
@@ -192,10 +164,6 @@ def get_subtitle_text(
         )
     )
 
-
-# ---------------------------------------------------------------------------
-# Main preprocessing pipeline
-# ---------------------------------------------------------------------------
 
 def run_preprocessing(settings: Settings) -> pd.DataFrame:
     """
