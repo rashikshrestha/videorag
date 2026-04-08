@@ -61,7 +61,7 @@ def load_subs(
     Results are memoised — the same file is parsed only once per session.
     """
     if video_name not in _subtitle_cache:
-        from videorag.data.preprocessing import find_subtitle
+        from videorag.dataset.preprocessing import find_subtitle
         p = find_subtitle(video_root / video_name, subtitle_root)
         _subtitle_cache[video_name] = pysubs2.load(str(p)) if p else None
     return _subtitle_cache[video_name]

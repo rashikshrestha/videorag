@@ -59,7 +59,7 @@ def _config_arg(parser: argparse.ArgumentParser) -> None:
 def cmd_preprocess(args: argparse.Namespace) -> None:
     """Run scene detection + keyframe extraction → segments.csv."""
     from videorag.config import load_settings
-    from videorag.data.preprocessing import run_preprocessing
+    from videorag.dataset.preprocessing import run_preprocessing
 
     settings = load_settings(args.config)
     run_preprocessing(settings)
@@ -138,7 +138,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     from videorag.api import build_context
     from videorag.config import load_settings
     from videorag.evaluation.evaluation import GOLD_QUERIES, evaluate_grounding
-    from videorag.data.preprocessing import run_preprocessing
+    from videorag.dataset.preprocessing import run_preprocessing
 
     settings = load_settings(args.config)
 
