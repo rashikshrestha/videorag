@@ -1,7 +1,7 @@
 paths:
-  video_root: "data/friends"
+  video_root: "data/friends_s1"
   subtitle_root: null
-  output_root: "data/friends_out"
+  output_root: "data/friends_s1_processed"
 
 preprocessing:
   # Number of frames to extract per scene (spread across the scene).
