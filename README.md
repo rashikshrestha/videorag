@@ -1,5 +1,5 @@
 # 🎞️ VideoRAG: Multimodal RAG Retrieval System for Video Grounding
-A production-ready Python package for temporal video grounding in long-form videos using multimodal retrieval-augmented generation (RAG). Given a natural-language query, the system retrieves the most relevant video scenes, then refines temporal boundaries using semantic reasoning, subtitle snapping, and visual grounding.
+Given a natural-language query, the system retrieves the most relevant video scenes using multimodal information: audio, video(image sequence) and subtitles.
 
 
 ## Overview
