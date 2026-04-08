@@ -19,6 +19,66 @@ from videorag.config import Settings
 warnings.filterwarnings("ignore")
 
 
+def _extract_embedded_subtitle(
+    video_path: Path,
+    cache_dir: Path,
+) -> Optional[Path]:
+    """
+    Extract the first embedded subtitle stream to a sidecar subtitle file.
+
+    Returns extracted subtitle path (srt/ass) on success, otherwise None.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    out_srt = cache_dir / f"{video_path.stem}.embedded.srt"
+    if out_srt.exists() and out_srt.stat().st_size > 0:
+        return out_srt
+
+    cmd_srt = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(video_path),
+        "-map",
+        "0:s:0",
+        str(out_srt),
+    ]
+    try:
+        proc = subprocess.run(cmd_srt, capture_output=True, text=True, check=False)
+        if proc.returncode == 0 and out_srt.exists() and out_srt.stat().st_size > 0:
+            return out_srt
+    except Exception:
+        pass
+
+    out_ass = cache_dir / f"{video_path.stem}.embedded.ass"
+    if out_ass.exists() and out_ass.stat().st_size > 0:
+        return out_ass
+
+    cmd_ass = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(video_path),
+        "-map",
+        "0:s:0",
+        str(out_ass),
+    ]
+    try:
+        proc = subprocess.run(cmd_ass, capture_output=True, text=True, check=False)
+        if proc.returncode == 0 and out_ass.exists() and out_ass.stat().st_size > 0:
+            return out_ass
+    except Exception:
+        pass
+
+    return None
+
+
 def _extract_scene_audio(
     video_path: Path,
     start: float,
@@ -65,27 +125,34 @@ def _extract_scene_audio(
     return None
 
 
-
 def find_subtitle(
     video_path: Path | str,
     subtitle_root: Path | str,
+    try_embedded: bool = True,
+    embedded_cache_dir: Path | str | None = None,
 ) -> Optional[Path]:
     """
-    Locate the subtitle file for *video_path* inside *subtitle_root*.
+    Locate subtitle for *video_path*.
 
     Strategy:
-    1. Exact stem match  (``<subtitle_root>/<stem>.srt|ass|ssa``)
-    2. Fuzzy match       (normalised names, substring containment)
+    1. Exact stem match in ``subtitle_root`` and video directory
+       (``<stem>.srt|ass|ssa``)
+    2. Fuzzy match in ``subtitle_root`` (normalised substring containment)
+    3. Optional fallback: extract first embedded subtitle stream via ffmpeg
+       into ``embedded_cache_dir``.
 
     Returns ``None`` when no subtitle file can be found.
     """
-    stem = Path(video_path).stem
+    video_path = Path(video_path)
+    stem = video_path.stem
     subtitle_root = Path(subtitle_root)
 
-    for ext in (".srt", ".ass", ".ssa"):
-        candidate = subtitle_root / f"{stem}{ext}"
-        if candidate.exists():
-            return candidate
+    search_roots = [subtitle_root, video_path.parent]
+    for root in search_roots:
+        for ext in (".srt", ".ass", ".ssa"):
+            candidate = root / f"{stem}{ext}"
+            if candidate.exists():
+                return candidate
 
     # Fuzzy: normalise both names and check substring containment.
     norm = stem.lower().replace("_", "").replace("-", "").replace(".", "")
@@ -94,6 +161,14 @@ def find_subtitle(
             fn = f.stem.lower().replace("_", "").replace("-", "").replace(".", "")
             if norm in fn or fn in norm:
                 return f
+
+    if try_embedded:
+        cache_dir = (
+            Path(embedded_cache_dir)
+            if embedded_cache_dir is not None
+            else (video_path.parent / "_embedded_subs_cache")
+        )
+        return _extract_embedded_subtitle(video_path, cache_dir)
 
     return None
 
@@ -265,13 +340,23 @@ def run_preprocessing(settings: Settings) -> pd.DataFrame:
 
     print(f"Found {len(video_files)} video(s):")
     for v in video_files:
-        sub = find_subtitle(v, subtitle_root)
+        sub = find_subtitle(
+            v,
+            subtitle_root,
+            try_embedded=True,
+            embedded_cache_dir=video_root / "_embedded_subs_cache",
+        )
         print(f"  {v.name:50s}  subtitle={'YES' if sub else 'MISSING'}")
 
     # ── Build segments DataFrame ──
     rows = []
     for video_path in tqdm(video_files, desc="Preprocessing"):
-        sub_path = find_subtitle(video_path, subtitle_root)
+        sub_path = find_subtitle(
+            video_path,
+            subtitle_root,
+            try_embedded=True,
+            embedded_cache_dir=video_root / "_embedded_subs_cache",
+        )
         subs = pysubs2.load(str(sub_path)) if sub_path else None
         scenes = detect_scenes(video_path, threshold=settings.preprocessing.scene_threshold)
 

@@ -63,7 +63,12 @@ def load_subs(
     """
     if video_name not in _subtitle_cache:
         from videorag.dataset.preprocessing import find_subtitle
-        p = find_subtitle(video_root / video_name, subtitle_root)
+        p = find_subtitle(
+            video_root / video_name,
+            subtitle_root,
+            try_embedded=True,
+            embedded_cache_dir=video_root / "_embedded_subs_cache",
+        )
         _subtitle_cache[video_name] = pysubs2.load(str(p)) if p else None
     return _subtitle_cache[video_name]
 

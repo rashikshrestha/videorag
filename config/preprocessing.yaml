@@ -1,0 +1,13 @@
+paths:
+  video_root: "data/friends"
+  subtitle_root: null
+  output_root: "data/friends_out"
+
+preprocessing:
+  # Number of frames to extract per scene (spread across the scene).
+  n_frames: 5
+  # Fractions of the scene duration at which to sample frames.
+  # Avoids 0.0 and 1.0 which often land on scene-cut black frames.
+  frame_fractions: [0.10, 0.30, 0.50, 0.70, 0.90]
+  # SceneDetect ContentDetector threshold (lower = more sensitive).
+  scene_threshold: 27
