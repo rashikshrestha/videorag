@@ -176,6 +176,14 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
         "dog barking",
     ]
 
+    n_frames = int(preprocessing_raw.get("n_frames", 5))
+    if "frame_fractions" in preprocessing_raw:
+        frame_fractions = [float(x) for x in preprocessing_raw["frame_fractions"]]
+        n_frames = len(frame_fractions)
+    else:
+        step = 0.8 / (n_frames + 1)
+        frame_fractions = [round(0.1 + step * (i + 1), 4) for i in range(n_frames)]
+
     return Settings(
         paths=PathSettings(
             video_root=Path(paths_raw.get("video_root", "data/videos")),
@@ -187,8 +195,8 @@ def load_settings(config_path: str | Path = "config.yaml") -> Settings:
             output_root=Path(paths_raw.get("output_root", "data/output")),
         ),
         preprocessing=PreprocessingSettings(
-            n_frames=int(preprocessing_raw.get("n_frames", 5)),
-            frame_fractions=[float(x) for x in preprocessing_raw.get("frame_fractions", [0.10, 0.30, 0.50, 0.70, 0.90])],
+            n_frames=n_frames,
+            frame_fractions=frame_fractions,
             scene_threshold=int(preprocessing_raw.get("scene_threshold", 27)),
         ),
         models=ModelSettings(

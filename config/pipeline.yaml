@@ -1,13 +1,13 @@
 paths:
   # Paths to video files, subtitle files, and output directory.
   # Use absolute paths or paths relative to the project root.
-  video_root: "data/videos"
-  subtitle_root: "data/subtitles"
-  output_root: "data/output"
+  video_root: "data/friends_s1_e1to5/raw"
+  subtitle_root: null
+  output_root: "data/friends_s1_e1to5/processed"
 
 preprocessing:
   # Number of frames to extract per scene (spread across the scene).
-  n_frames: 5
+  n_frames: 15
   # Fractions of the scene duration at which to sample frames.
   # Avoids 0.0 and 1.0 which often land on scene-cut black frames.
   frame_fractions: [0.10, 0.30, 0.50, 0.70, 0.90]

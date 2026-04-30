@@ -42,7 +42,7 @@ VideoRAG combines:
 ## Preprocessing Pipeline
 
 ```bash
-python scripts/run_pipeline.py preprocess --config preprocess.yaml
+python scripts/run_pipeline.py preprocess --config config/preprocessing.yaml
 ```
 Initial step to preprocess raw video files and prepare them for embedding and retrieval.
 
@@ -70,27 +70,61 @@ Initial step to preprocess raw video files and prepare them for embedding and re
 
 ## Build FAISS Indices
 ```bash
-python scripts/run_pipeline.py index --config config.yaml
+python scripts/run_pipeline.py index --config config/pipeline.yaml
 ```
-Output: Dual FAISS indices (text and image) for fast retrieval.
+Output: Dual FAISS indices (text and image) saved to `<output_root>/indices/`.
+
+Use `--force` to rebuild even if cached indices already exist:
+```bash
+python scripts/run_pipeline.py index --config config/pipeline.yaml --force
+```
 
 ## Ground a Query
+
+Run a natural-language query against the indexed video corpus:
+
 ```bash
 python scripts/run_pipeline.py query \
-    --config config.yaml \
+    --config config/pipeline.yaml \
     --text "Ross and Rachel argue" \
     --top-k 5 \
     --merge-gap 20.0
 ```
-Output: Top-5 videos with temporal bounds and confidence scores.
+
+### Query Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--text` | _(required)_ | Natural-language query string |
+| `--top-k` | `10` | Number of candidate scenes to retrieve before refinement |
+| `--show-top` | `3` | Number of results to display |
+| `--merge-gap` | `20.0` | Max gap in seconds between spans to merge into one result |
+
+### Example Output
+
+```
+QUERY: Ross and Rachel argue
+============================
+
+[1] Friends.S01E19.The.One.Where.the.Monkey.Gets.Away.mkv  scene=311  type=dialogue
+    SCENE:    17:42.85 → 17:53.86
+    GROUNDED: 17:36.01 → 18:00.74  (span=24.7s)
+    CONF:     100.00%  (ret=1.169 gnd=0.948 kw=0.030)
+    SUB: I mean, you're off in Rachel Land... totally oblivious to people's feelings...
+```
+
+Each result includes:
+- **SCENE**: raw scene boundary from preprocessing
+- **GROUNDED**: refined temporal span after subtitle alignment and visual scoring
+- **CONF**: confidence score broken down into retrieval (`ret`), grounding (`gnd`), and keyword (`kw`) components
 
 ## Evaluate on Gold Queries
 ```bash
-python scripts/run_pipeline.py evaluate --config config.yaml
+python scripts/run_pipeline.py evaluate --config config/pipeline.yaml
 ```
-Output: Metrics (Top-1 accuracy, IoU, recall@IoU≥0.5) on 17 built-in queries.
+Output: Metrics (Top-1 accuracy, IoU, recall@IoU≥0.5) on 17 built-in queries. Results saved to `<output_root>/results/`.
 
-## Or Run whole pipeline
+## Run the Full Pipeline
 ```bash
-python scripts/run_pipeline.py run-all --config config.yaml
+python scripts/run_pipeline.py run-all --config config/pipeline.yaml
 ```

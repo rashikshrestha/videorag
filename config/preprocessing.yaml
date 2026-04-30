@@ -1,14 +1,11 @@
 paths:
-  video_root: "data/friends_s1"
+  video_root: "data/friends_s1_e1to5/raw"
   subtitle_root: null
-  output_root: "data/friends_s1_processed"
+  output_root: "data/friends_s1_e1to5/processed"
 
 preprocessing:
-  # Number of frames to extract per scene (spread across the scene).
-  n_frames: 5
-  # Fractions of the scene duration at which to sample frames.
-  # Avoids 0.0 and 1.0 which often land on scene-cut black frames.
-  frame_fractions: [0.10, 0.30, 0.50, 0.70, 0.90]
+  # Number of frames to extract per scene (spread evenly across the scene).
+  n_frames: 15
   # SceneDetect ContentDetector threshold (lower = more sensitive).
   scene_threshold: 27
 
@@ -25,15 +22,15 @@ audio:
   top_k_events: 5
   # Event prompts used for non-ASR sound cues.
   event_labels:
-    - gunshot
-    - glass breaking
-    - scream
-    - explosion
-    - applause
     - laughter
-    - door slam
-    - car horn
-    - footsteps
-    - sirens
+    - applause
     - phone ringing
-    - dog barking
+    - door slam
+    - knock on door
+    - crying
+    - crowd noise
+    - coffee machine
+    - footsteps
+    - music
+    - television
+    - car horn
