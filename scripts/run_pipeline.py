@@ -46,9 +46,9 @@ def _config_arg(parser: argparse.ArgumentParser) -> None:
     """Add --config argument to *parser*."""
     parser.add_argument(
         "--config",
-        default="config.yaml",
+        default="config/pipeline.yaml",
         metavar="PATH",
-        help="Path to config.yaml  (default: %(default)s)",
+        help="Path to config yaml  (default: %(default)s)",
     )
 
 
@@ -82,8 +82,11 @@ def cmd_index(args: argparse.Namespace) -> None:
         )
 
     df = pd.read_csv(seg_path)
-    df["subtitle"] = df["subtitle"].fillna("").astype(str)
-    df["frames"]   = df["frames"].fillna("[]").astype(str)
+    df["subtitle"]        = df["subtitle"].fillna("").astype(str)
+    df["frames"]          = df["frames"].fillna("[]").astype(str)
+    df["audio_path"]      = df["audio_path"].fillna("").astype(str)
+    df["audio_events"]    = df["audio_events"].fillna("[]").astype(str)
+    df["audio_event_text"] = df["audio_event_text"].fillna("").astype(str)
     df["embed_text"] = df["subtitle"].apply(
         lambda x: x.strip() if x.strip() else "silent scene no dialogue"
     )

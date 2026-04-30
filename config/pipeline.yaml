@@ -79,7 +79,7 @@ audio:
   # Audio sample rate used for extracted scene clips and model inference.
   sample_rate: 16000
   # Output directory (relative to output_root) for scene-level wav clips.
-  scene_audio_dir: "audio/scenes"
+  scene_audio_dir: "audio"
   # CLAP-compatible model for audio/text shared embedding space.
   model: "laion/clap-htsat-unfused"
   # Number of top event labels to keep per scene.

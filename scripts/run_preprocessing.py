@@ -20,9 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config",
-        default="config.yaml",
+        default="config/preprocessing.yaml",
         metavar="PATH",
-        help="Path to config.yaml (default: %(default)s)",
+        help="Path to config yaml (default: %(default)s)",
     )
     return parser
 
