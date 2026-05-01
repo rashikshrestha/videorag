@@ -96,8 +96,7 @@ def load_models(settings: Settings) -> ModelBundle:
                     t_feat = audio_model.get_text_features(
                         input_ids=text_inputs["input_ids"].to(device),
                         attention_mask=text_inputs["attention_mask"].to(device),
-                    )
-                    t_feat = t_feat / torch.norm(t_feat, dim=-1, keepdim=True)
+                    ).pooler_output
                 audio_event_text_embeddings = t_feat.detach().cpu().numpy().astype(np.float32)
         except Exception as exc:
             print(f"⚠️  Audio model load failed; continuing without audio model ({exc})")
@@ -139,6 +138,9 @@ def load_wav_mono(path: str | Path) -> Optional[np.ndarray]:
         return None
 
 
+_CLAP_SAMPLE_RATE = 48_000  # CLAP was trained at 48 kHz
+
+
 def embed_audio_wav(path: str | Path, bundle: ModelBundle, sample_rate: int) -> Optional[np.ndarray]:
     """Embed one wav file in CLAP shared space and return unit-normalized vector."""
     if bundle.audio_model is None or bundle.audio_processor is None:
@@ -149,16 +151,25 @@ def embed_audio_wav(path: str | Path, bundle: ModelBundle, sample_rate: int) -> 
         return None
 
     try:
+        # CLAP expects 48 kHz; resample linearly if WAV was saved at a different rate.
+        if sample_rate != _CLAP_SAMPLE_RATE:
+            target_len = int(round(len(audio) * _CLAP_SAMPLE_RATE / sample_rate))
+            audio = np.interp(
+                np.linspace(0, len(audio) - 1, target_len),
+                np.arange(len(audio)),
+                audio,
+            ).astype(np.float32)
+
         inputs = bundle.audio_processor(
-            audios=[audio],
-            sampling_rate=sample_rate,
+            audio=audio,
+            sampling_rate=_CLAP_SAMPLE_RATE,
             return_tensors="pt",
         )
         with torch.no_grad():
             feat = bundle.audio_model.get_audio_features(
                 input_features=inputs["input_features"].to(bundle.device),
-            )
-            feat = feat / torch.norm(feat, dim=-1, keepdim=True)
+                is_longer=inputs.get("is_longer", None),
+            ).pooler_output
         return feat.detach().cpu().numpy()[0].astype(np.float32)
     except Exception:
         return None
@@ -180,8 +191,7 @@ def embed_audio_query_text(query: str, bundle: ModelBundle) -> Optional[np.ndarr
             feat = bundle.audio_model.get_text_features(
                 input_ids=inputs["input_ids"].to(bundle.device),
                 attention_mask=inputs["attention_mask"].to(bundle.device),
-            )
-            feat = feat / torch.norm(feat, dim=-1, keepdim=True)
+            ).pooler_output
         return feat.detach().cpu().numpy().astype(np.float32)
     except Exception:
         return None

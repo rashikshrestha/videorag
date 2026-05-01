@@ -85,6 +85,9 @@ def build_or_load_indices(
     segments_df: pd.DataFrame,
     settings: Settings,
     bundle: ModelBundle,
+    build_text: bool = True,
+    build_image: bool = True,
+    build_audio: bool = True,
 ) -> Tuple[
     faiss.IndexFlatIP,
     faiss.IndexFlatIP,
@@ -97,20 +100,16 @@ def build_or_load_indices(
     """
     Return ``(text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df)``.
 
-    If persisted indices exist under ``<output_root>/indices/`` *and* the
-    ``segments.csv`` timestamp has not changed since they were built, the
-    cached files are loaded directly — skipping potentially slow embedding.
-
-    Otherwise both embedding matrices are computed from scratch, saved to
-    disk and loaded back.
-
     Args:
-        segments_df: DataFrame produced by :func:`~videorag.data.preprocessing.run_preprocessing`.
-        settings:    Project :class:`~videorag.config.Settings`.
-        bundle:      Loaded :class:`~videorag.models.embeddings.ModelBundle`.
+        segments_df: DataFrame produced by preprocessing.
+        settings:    Project settings.
+        bundle:      Loaded model bundle.
+        build_text:  Generate (or regenerate) the text index.
+        build_image: Generate (or regenerate) the image index.
+        build_audio: Generate (or regenerate) the audio index.
 
-    Returns:
-        Tuple of ``(text_index, image_index, audio_index, text_embeddings, image_embeddings, audio_embeddings, segments_df)``.
+    When a flag is False the function loads that index from the existing
+    cached files on disk (falling back to building if none exist).
     """
     index_dir = settings.paths.output_root / "indices"
     index_dir.mkdir(parents=True, exist_ok=True)
@@ -125,64 +124,87 @@ def build_or_load_indices(
 
     seg_path = settings.paths.output_root / "segments.csv"
     current_mtime = str(seg_path.stat().st_mtime) if seg_path.exists() else ""
-    audio_enabled = bool(settings.audio.enabled and bundle.audio_model is not None)
+    audio_available = bool(settings.audio.enabled and bundle.audio_model is not None)
 
     expected_manifest = {
         "segments_mtime": current_mtime,
-        "audio_enabled": audio_enabled,
+        "audio_enabled": audio_available,
         "audio_model": settings.audio.model,
     }
-    cache_valid = False
-    if manifest_path.exists():
-        try:
-            manifest = json.loads(manifest_path.read_text())
-            basic_paths = [text_idx_path, img_idx_path, text_emb_path, img_emb_path]
-            basic_ok = all(p.exists() for p in basic_paths)
-            if manifest == expected_manifest and basic_ok:
-                if audio_enabled:
-                    cache_valid = aud_idx_path.exists() and aud_emb_path.exists()
-                else:
-                    cache_valid = True
-        except Exception:
-            cache_valid = False
 
-    if cache_valid:
-        print("Loading cached FAISS indices…")
-        text_index = load_index(text_idx_path)
-        image_index = load_index(img_idx_path)
-        text_emb = load_embeddings(text_emb_path)
-        image_emb = load_embeddings(img_emb_path)
-        audio_index: Optional[faiss.IndexFlatIP] = None
-        audio_emb: Optional[np.ndarray] = None
-        if audio_enabled:
-            audio_index = load_index(aud_idx_path)
-            audio_emb = load_embeddings(aud_emb_path)
-        print(
-            f"✅ Loaded  text={text_index.ntotal}×{text_emb.shape[1]}d  "
-            f"image={image_index.ntotal}×{image_emb.shape[1]}d"
+    # Full cache check — only used when all three indices are being (re)built.
+    if build_text and build_image and build_audio:
+        cache_valid = False
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text())
+                basic_paths = [text_idx_path, img_idx_path, text_emb_path, img_emb_path]
+                basic_ok = all(p.exists() for p in basic_paths)
+                if manifest == expected_manifest and basic_ok:
+                    if audio_available:
+                        cache_valid = aud_idx_path.exists() and aud_emb_path.exists()
+                    else:
+                        cache_valid = True
+            except Exception:
+                cache_valid = False
+
+        if cache_valid:
+            print("Loading cached FAISS indices…")
+            text_index = load_index(text_idx_path)
+            image_index = load_index(img_idx_path)
+            text_emb = load_embeddings(text_emb_path)
+            image_emb = load_embeddings(img_emb_path)
+            audio_index: Optional[faiss.IndexFlatIP] = None
+            audio_emb: Optional[np.ndarray] = None
+            if audio_available:
+                audio_index = load_index(aud_idx_path)
+                audio_emb = load_embeddings(aud_emb_path)
+            print(
+                f"✅ Loaded  text={text_index.ntotal}×{text_emb.shape[1]}d  "
+                f"image={image_index.ntotal}×{image_emb.shape[1]}d"
+            )
+            if "audio_events" not in segments_df.columns:
+                segments_df["audio_events"] = "[]"
+            if "audio_event_text" not in segments_df.columns:
+                segments_df["audio_event_text"] = ""
+            return text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df
+
+    # ── Build / load each modality ──────────────────────────────────────────
+
+    # TEXT
+    if build_text or not (text_idx_path.exists() and text_emb_path.exists()):
+        if not build_text:
+            print("Text index not cached — building despite --no-text…")
+        else:
+            print("Building text index…")
+        texts = segments_df["embed_text"].tolist()
+        text_emb = generate_text_embeddings(
+            texts, bundle, batch_size=settings.models.text_embed_batch_size
         )
-        if "audio_events" not in segments_df.columns:
-            segments_df["audio_events"] = "[]"
-        if "audio_event_text" not in segments_df.columns:
-            segments_df["audio_event_text"] = ""
-        return text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df
+        text_index = build_index(text_emb)
+    else:
+        print("Loading cached text index (--no-text)…")
+        text_index = load_index(text_idx_path)
+        text_emb = load_embeddings(text_emb_path)
 
-    # ── Build from scratch ──
-    print("Building FAISS indices from scratch…")
+    # IMAGE
+    if build_image or not (img_idx_path.exists() and img_emb_path.exists()):
+        if not build_image:
+            print("Image index not cached — building despite --no-image…")
+        else:
+            print("Building image index…")
+        image_emb = generate_image_embeddings(segments_df["frames"].tolist(), bundle)
+        image_index = build_index(image_emb)
+    else:
+        print("Loading cached image index (--no-image)…")
+        image_index = load_index(img_idx_path)
+        image_emb = load_embeddings(img_emb_path)
 
-    texts = segments_df["embed_text"].tolist()
-    text_emb = generate_text_embeddings(
-        texts, bundle, batch_size=settings.models.text_embed_batch_size
-    )
-
-    image_emb = generate_image_embeddings(segments_df["frames"].tolist(), bundle)
-
-    text_index  = build_index(text_emb)
-    image_index = build_index(image_emb)
-
+    # AUDIO
     audio_index: Optional[faiss.IndexFlatIP] = None
     audio_emb: Optional[np.ndarray] = None
-    if audio_enabled and "audio_path" in segments_df.columns:
+    if audio_available and build_audio and "audio_path" in segments_df.columns:
+        print("Building audio index…")
         audio_emb = generate_audio_embeddings(
             segments_df["audio_path"].fillna("").astype(str).tolist(),
             bundle,
@@ -206,21 +228,21 @@ def build_or_load_indices(
         segments_df["audio_event_text"] = audio_event_text
         segments_df.to_csv(seg_path, index=False)
 
-    # Persist
-    save_index(text_index, text_idx_path)
-    save_index(image_index, img_idx_path)
+    # ── Persist what was (re)built ──────────────────────────────────────────
+    if build_text:
+        save_index(text_index, text_idx_path)
+        save_embeddings(text_emb, text_emb_path)
+    if build_image:
+        save_index(image_index, img_idx_path)
+        save_embeddings(image_emb, img_emb_path)
     if audio_index is not None and audio_emb is not None:
         save_index(audio_index, aud_idx_path)
         save_embeddings(audio_emb, aud_emb_path)
-    save_embeddings(text_emb, text_emb_path)
-    save_embeddings(image_emb, img_emb_path)
+
     manifest_path.write_text(json.dumps(expected_manifest))
 
-    print(
-        f"✅ Indices built and saved → {index_dir}\n"
-        f"   text={text_index.ntotal}×{text_emb.shape[1]}d  "
-        f"image={image_index.ntotal}×{image_emb.shape[1]}d"
-    )
+    print(f"✅ Indices ready → {index_dir}")
+    print(f"   text={text_index.ntotal}×{text_emb.shape[1]}d  image={image_index.ntotal}×{image_emb.shape[1]}d")
     if audio_index is not None and audio_emb is not None:
         print(f"   audio={audio_index.ntotal}×{audio_emb.shape[1]}d")
     return text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df

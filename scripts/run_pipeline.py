@@ -106,7 +106,12 @@ def cmd_index(args: argparse.Namespace) -> None:
         print("Forcing index rebuild…")
 
     bundle = load_models(settings)
-    build_or_load_indices(df, settings, bundle)
+    build_or_load_indices(
+        df, settings, bundle,
+        build_text=not args.no_text,
+        build_image=not args.no_image,
+        build_audio=not args.no_audio,
+    )
 
 
 def cmd_query(args: argparse.Namespace) -> None:
@@ -217,6 +222,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="Force rebuild even when cached indices exist",
+    )
+    p_idx.add_argument(
+        "--no-text",
+        action="store_true",
+        dest="no_text",
+        help="Skip text index rebuild (load from cache if available)",
+    )
+    p_idx.add_argument(
+        "--no-image",
+        action="store_true",
+        dest="no_image",
+        help="Skip image index rebuild (load from cache if available)",
+    )
+    p_idx.add_argument(
+        "--no-audio",
+        action="store_true",
+        dest="no_audio",
+        help="Skip audio index rebuild",
     )
 
     # ── query ────────────────────────────────────────────────────────────
