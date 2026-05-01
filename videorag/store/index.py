@@ -203,7 +203,11 @@ def build_or_load_indices(
     # AUDIO
     audio_index: Optional[faiss.IndexFlatIP] = None
     audio_emb: Optional[np.ndarray] = None
-    if audio_available and build_audio and "audio_path" in segments_df.columns:
+    if audio_available and not build_audio and aud_idx_path.exists() and aud_emb_path.exists():
+        print("Loading cached audio index…")
+        audio_index = load_index(aud_idx_path)
+        audio_emb = load_embeddings(aud_emb_path)
+    elif audio_available and build_audio and "audio_path" in segments_df.columns:
         print("Building audio index…")
         audio_emb = generate_audio_embeddings(
             segments_df["audio_path"].fillna("").astype(str).tolist(),

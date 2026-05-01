@@ -81,9 +81,12 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     # ── Load models ──
     bundle = load_models(settings)
 
-    # ── Build or load FAISS indices ──
+    # ── Load FAISS indices (never rebuild during query time) ──
     text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df = build_or_load_indices(
-        segments_df, settings, bundle
+        segments_df, settings, bundle,
+        build_text=False,
+        build_image=False,
+        build_audio=False,
     )
 
     return VideoRAGContext(
