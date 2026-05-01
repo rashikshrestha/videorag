@@ -111,6 +111,7 @@ def build_or_load_indices(
     When a flag is False the function loads that index from the existing
     cached files on disk (falling back to building if none exist).
     """
+    print("\nBuilding/Loading FAISS indices:")
     index_dir = settings.paths.output_root / "indices"
     index_dir.mkdir(parents=True, exist_ok=True)
 
@@ -183,7 +184,7 @@ def build_or_load_indices(
         )
         text_index = build_index(text_emb)
     else:
-        print("Loading cached text index (--no-text)…")
+        print("Loading cached text index")
         text_index = load_index(text_idx_path)
         text_emb = load_embeddings(text_emb_path)
 
@@ -196,7 +197,7 @@ def build_or_load_indices(
         image_emb = generate_image_embeddings(segments_df["frames"].tolist(), bundle)
         image_index = build_index(image_emb)
     else:
-        print("Loading cached image index (--no-image)…")
+        print("Loading cached image index")
         image_index = load_index(img_idx_path)
         image_emb = load_embeddings(img_emb_path)
 
@@ -204,7 +205,7 @@ def build_or_load_indices(
     audio_index: Optional[faiss.IndexFlatIP] = None
     audio_emb: Optional[np.ndarray] = None
     if audio_available and not build_audio and aud_idx_path.exists() and aud_emb_path.exists():
-        print("Loading cached audio index…")
+        print("Loading cached audio index")
         audio_index = load_index(aud_idx_path)
         audio_emb = load_embeddings(aud_emb_path)
     elif audio_available and build_audio and "audio_path" in segments_df.columns:
@@ -245,8 +246,9 @@ def build_or_load_indices(
 
     manifest_path.write_text(json.dumps(expected_manifest))
 
-    print(f"✅ Indices ready → {index_dir}")
-    print(f"   text={text_index.ntotal}×{text_emb.shape[1]}d  image={image_index.ntotal}×{image_emb.shape[1]}d")
+    print(f"✅ Indices ready: ", end="")
+    print(f"text={text_index.ntotal}×{text_emb.shape[1]}d  image={image_index.ntotal}×{image_emb.shape[1]}d ", end="")
     if audio_index is not None and audio_emb is not None:
-        print(f"   audio={audio_index.ntotal}×{audio_emb.shape[1]}d")
+        print(f"   audio={audio_index.ntotal}×{audio_emb.shape[1]}d", end="")
+    print()
     return text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df

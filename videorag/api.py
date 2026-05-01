@@ -48,9 +48,10 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     Raises:
         FileNotFoundError: when ``config.yaml`` or ``segments.csv`` is absent.
     """
+    print("\n=============== Building VideoRAG context ===============")
     settings: Settings = load_settings(config_path)
 
-    # ── Load segments CSV ──
+    #! Load segments CSV
     seg_path = settings.paths.output_root / "segments.csv"
     if not seg_path.exists():
         raise FileNotFoundError(
@@ -78,10 +79,10 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     )
     print(f"Loaded {len(segments_df)} segments from {seg_path}")
 
-    # ── Load models ──
+    #! Load models
     bundle = load_models(settings)
 
-    # ── Load FAISS indices (never rebuild during query time) ──
+    #! Load FAISS indices
     text_index, image_index, audio_index, text_emb, image_emb, audio_emb, segments_df = build_or_load_indices(
         segments_df, settings, bundle,
         build_text=False,

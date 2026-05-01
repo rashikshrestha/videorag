@@ -86,8 +86,9 @@ Run a natural-language query against the indexed video corpus:
 ```bash
 python scripts/run_pipeline.py query \
     --config config/pipeline.yaml \
-    --text "Ross and Rachel argue" \
+    --text "Rachel looses her Ring" \
     --top-k 5 \
+    --show-top 5 \
     --merge-gap 20.0
 ```
 

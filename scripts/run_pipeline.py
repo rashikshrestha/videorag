@@ -120,6 +120,7 @@ def cmd_query(args: argparse.Namespace) -> None:
     from videorag.pipeline.pipeline import run
 
     ctx = build_context(args.config)
+    exit()
     run(
         args.text,
         ctx,

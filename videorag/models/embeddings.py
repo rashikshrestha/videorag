@@ -18,12 +18,21 @@ import wave
 from pathlib import Path
 from typing import List, NamedTuple, Optional
 
+import logging
+import warnings
+
 import numpy as np
 import torch
 from PIL import Image
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 from transformers import AutoProcessor, CLIPModel, CLIPProcessor
+import transformers
+
+# Suppress noisy model-load output (UNEXPECTED key reports, HF Hub auth warning)
+transformers.logging.set_verbosity_error()
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", message=".*unauthenticated.*")
 
 try:
     from transformers import ClapModel
@@ -66,8 +75,11 @@ def load_models(settings: Settings) -> ModelBundle:
     """
     device = settings.models.device
 
+    print(f"\nLoading models onto {device} device:")
+    print("1. Loading SentenceTransformer (text model)")
     text_model = SentenceTransformer(settings.models.text_model, device=device)
 
+    print("2. Loading CLIP (image model)")
     clip_model = CLIPModel.from_pretrained(settings.models.clip_model)
     clip_model = clip_model.to(device).eval()  # type: ignore[attr-defined]
 
@@ -79,6 +91,7 @@ def load_models(settings: Settings) -> ModelBundle:
     audio_event_labels: List[str] = []
 
     if settings.audio.enabled and ClapModel is not None:
+        print("3. Loading CLAP (audio model)")
         try:
             audio_model = ClapModel.from_pretrained(settings.audio.model)
             audio_model = audio_model.to(device).eval()  # type: ignore[attr-defined]
