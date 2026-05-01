@@ -48,7 +48,7 @@ def build_context(config_path: str | Path = "config.yaml") -> VideoRAGContext:
     Raises:
         FileNotFoundError: when ``config.yaml`` or ``segments.csv`` is absent.
     """
-    print("\n=============== Building VideoRAG context ===============")
+    print("\n\033[94m=============== Building VideoRAG context ===============\033[0m")
     settings: Settings = load_settings(config_path)
 
     #! Load segments CSV

@@ -120,7 +120,7 @@ def cmd_query(args: argparse.Namespace) -> None:
     from videorag.pipeline.pipeline import run
 
     ctx = build_context(args.config)
-    exit()
+    # model is built for all image, text, audio despite --no-xxx flags
     run(
         args.text,
         ctx,
@@ -130,6 +130,7 @@ def cmd_query(args: argparse.Namespace) -> None:
         use_text=not args.no_text,
         use_image=not args.no_image,
         use_audio=not args.no_audio,
+        use_refine=not args.no_refine,
     )
 
 
@@ -261,9 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_qry.add_argument("--top-k",    type=int,   default=10,   help="Retrieval candidates  (default: 10)")
     p_qry.add_argument("--show-top", type=int,   default=3,    help="Results to display    (default: 3)")
     p_qry.add_argument("--merge-gap", type=float, default=20.0, help="Span merge gap (s)   (default: 20.0)")
-    p_qry.add_argument("--no-text",  action="store_true", dest="no_text",  help="Disable text index during retrieval")
-    p_qry.add_argument("--no-image", action="store_true", dest="no_image", help="Disable image index during retrieval")
-    p_qry.add_argument("--no-audio", action="store_true", dest="no_audio", help="Disable audio index during retrieval")
+    p_qry.add_argument("--no-text",   action="store_true", dest="no_text",   help="Disable text index during retrieval")
+    p_qry.add_argument("--no-image",  action="store_true", dest="no_image",  help="Disable image index during retrieval")
+    p_qry.add_argument("--no-audio",  action="store_true", dest="no_audio",  help="Disable audio index during retrieval")
+    p_qry.add_argument("--no-refine", action="store_true", dest="no_refine", help="Skip temporal refinement; use raw scene boundaries")
 
     # ── evaluate ─────────────────────────────────────────────────────────
     p_ev = sub.add_parser(

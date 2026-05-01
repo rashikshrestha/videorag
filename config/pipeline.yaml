@@ -42,7 +42,7 @@ retrieval:
       image: 0.35
       audio: 0.20
   # Character mention boost added to fused score per matched character.
-  character_boost: 0.3
+  character_boost: 0.1
 
 refinement:
   # How far (seconds) to extend the search window beyond the scene boundary.

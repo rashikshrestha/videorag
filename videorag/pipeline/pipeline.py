@@ -191,6 +191,7 @@ def ground(
     use_text: bool = True,
     use_image: bool = True,
     use_audio: bool = True,
+    use_refine: bool = True,
 ) -> pd.DataFrame:
     """
     Retrieve candidate scenes, refine each to a fine-grained span, fuse
@@ -212,12 +213,14 @@ def ground(
         ``video``, ``scene_id``, ``query_type``, ``refined_start``,
         ``refined_end``, ``span_seconds``, ``confidence``, ``subtitle``.
     """
+    #! Settings
     settings = ctx.settings
     if top_k is None:
         top_k = settings.retrieval.top_k
     if merge_gap is None:
         merge_gap = settings.retrieval.merge_gap
 
+    #! Retrieval
     retrieved = hybrid_search(
         query,
         ctx.segments_df,
@@ -229,17 +232,27 @@ def ground(
         top_k=top_k,
     )
 
+    #! Refinement, score fusion and calibration
     pl = settings.pipeline
     results = []
+    if use_refine:
+        print(f"Refining scenes")
+    else:
+        print(f"Skipping refinement")
     for _, row in retrieved.iterrows():
-        r_start, r_end, g_conf = refine(
-            row,
-            query,
-            ctx.bundle,
-            settings,
-            settings.paths.video_root,
-            settings.paths.subtitle_root,
-        )
+        if use_refine:
+            r_start, r_end, g_conf = refine(
+                row,
+                query,
+                ctx.bundle,
+                settings,
+                settings.paths.video_root,
+                settings.paths.subtitle_root,
+            )
+        else:
+            r_start = float(row["start"])
+            r_end   = float(row["end"])
+            g_conf  = float(row["hybrid_score"])
 
         kw_hits, kw_r = _kw_overlap(query, row["subtitle"])
         kw_bonus = min(0.05, 0.03 * kw_r + 0.005 * kw_hits)
@@ -274,8 +287,12 @@ def ground(
         ascending=False,
     ).reset_index(drop=True)
 
+    #! Merge Gap
     if merge_gap > 0:
         out = merge_spans(out, merge_gap=merge_gap)
+        print(f"{len(out)} scenes after merging with gap={merge_gap}s")
+    else:
+        print("Span merging disabled")
 
     return out
 
@@ -293,6 +310,7 @@ def run(
     use_text: bool = True,
     use_image: bool = True,
     use_audio: bool = True,
+    use_refine: bool = True,
 ) -> pd.DataFrame:
     """
     Pretty-print the top grounding results and return the full DataFrame.
@@ -307,8 +325,10 @@ def run(
     Returns:
         Full grounding DataFrame (same as :func:`ground`).
     """
+    print("\n\033[94m=============== Video Grounding ===============\033[0m") 
     out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap,
-                 use_text=use_text, use_image=use_image, use_audio=use_audio)
+                 use_text=use_text, use_image=use_image, use_audio=use_audio,
+                 use_refine=use_refine)
     _AGG = {"action": "max-pool", "dialogue": "mean-pool", "mixed": "mean-pool"}
 
     print("=" * 100)

@@ -122,6 +122,7 @@ def embed_query_text(query: str, bundle: ModelBundle) -> np.ndarray:
     """
     Encode *query* via SentenceTransformer into a (1, 384) unit-norm vector.
     """
+    print(f"Embedding query with Text encoder")
     return bundle.text_model.encode(
         [query],
         convert_to_numpy=True,
@@ -145,6 +146,7 @@ def embed_query_clip(query: str, bundle: ModelBundle) -> np.ndarray:
     Fix: apply ``text_projection`` so text and image vectors are both in
     the 512-dim CLIP shared embedding space.
     """
+    print(f"Embedding query with Image encoder")
     inp = bundle.clip_processor(
         text=[query], return_tensors="pt", padding=True
     )

@@ -17,11 +17,13 @@ refine(row, query, bundle, settings, video_root, subtitle_root)
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")  # AV_LOG_QUIET
 import cv2
 import numpy as np
 import pandas as pd

@@ -73,35 +73,42 @@ def hybrid_search(
     """
     n = len(segments_df)
     qtype, alpha, beta, gamma = classify_query(query, settings)
+    print(f"Query classified as '{qtype}' with weights text(α)={alpha:.2f}, Image(β)={beta:.2f}, Audio(γ)={gamma:.2f}")
 
+    #! Encode query with active encoders
     q_text  = embed_query_text(query, bundle)  if text_index  is not None else None
     q_clip  = embed_query_clip(query, bundle)  if image_index is not None else None
     q_audio = embed_query_audio(query, bundle) if audio_index is not None else None
 
-    # ── Search each active index over the full corpus ──
+    #! Query Text Index
     raw_t = np.zeros(n, dtype=np.float32)
     if text_index is not None and q_text is not None:
         ts, ti = text_index.search(q_text, n)
+        # shape of ts, ti is (1, n) since we query with a single vector
         ts_map = dict(zip(ti[0].tolist(), ts[0].tolist()))
         raw_t = np.array([max(0.0, ts_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
+        # shape raw_t is (n,) and contains the text similarity scores for each segment
 
+    #! Query Image Index
     raw_i = np.zeros(n, dtype=np.float32)
     if image_index is not None and q_clip is not None:
         is_, ii = image_index.search(q_clip, n)
         is_map = dict(zip(ii[0].tolist(), is_[0].tolist()))
         raw_i = np.array([max(0.0, is_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
 
+    #! Query Audio Index
     raw_a = np.zeros(n, dtype=np.float32)
     if audio_index is not None and q_audio is not None:
         as_, ai = audio_index.search(q_audio, n)
         as_map = dict(zip(ai[0].tolist(), as_[0].tolist()))
         raw_a = np.array([max(0.0, as_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
 
+    #! Normalize betn 0-1
     norm_t = _safe_minmax(raw_t)
     norm_i = _safe_minmax(raw_i)
     norm_a = _safe_minmax(raw_a)
 
-    # Renormalize weights over active modalities only.
+    #! Blending modalities with weights α, β, γ
     w_t = alpha if text_index  is not None else 0.0
     w_i = beta  if image_index is not None else 0.0
     w_a = gamma if (audio_index is not None and q_audio is not None) else 0.0
@@ -110,7 +117,7 @@ def hybrid_search(
         total = 1.0
     fused = (w_t / total) * norm_t + (w_i / total) * norm_i + (w_a / total) * norm_a
 
-    # ── Character boost ──
+    #! Character boost
     q_lower = query.lower()
     characters = settings.characters
     query_chars = [c for c in characters if c in q_lower]
@@ -123,8 +130,10 @@ def hybrid_search(
             if hits > 0:
                 fused[i] += boost * (hits / len(query_chars))
 
+    #! Get top-k results
     order = np.argsort(fused)[::-1][:top_k]
 
+    #! Format results as DataFrame
     rows = []
     for rank, idx in enumerate(order, 1):
         r = segments_df.iloc[idx]
@@ -145,4 +154,6 @@ def hybrid_search(
             }
         )
 
-    return pd.DataFrame(rows)
+    return_data = pd.DataFrame(rows)
+    print(f"Hybrid search completed. Returning top-{len(return_data)} results.")
+    return return_data

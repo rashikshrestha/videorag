@@ -191,15 +191,19 @@ def embed_audio_wav(path: str | Path, bundle: ModelBundle, sample_rate: int) -> 
 def embed_audio_query_text(query: str, bundle: ModelBundle) -> Optional[np.ndarray]:
     """Project query text into audio (CLAP) embedding space."""
     if bundle.audio_model is None or bundle.audio_processor is None:
+        print("Audio Encoding disabled")
         return None
 
     try:
+        print(f"Embedding query with Audio encoder")
+
         inputs = bundle.audio_processor(
             text=[query],
             return_tensors="pt",
             padding=True,
             truncation=True,
         )
+        print(inputs)
         with torch.no_grad():
             feat = bundle.audio_model.get_text_features(
                 input_ids=inputs["input_ids"].to(bundle.device),
