@@ -188,6 +188,9 @@ def ground(
     ctx: VideoRAGContext,
     top_k: Optional[int] = None,
     merge_gap: Optional[float] = None,
+    use_text: bool = True,
+    use_image: bool = True,
+    use_audio: bool = True,
 ) -> pd.DataFrame:
     """
     Retrieve candidate scenes, refine each to a fine-grained span, fuse
@@ -218,9 +221,9 @@ def ground(
     retrieved = hybrid_search(
         query,
         ctx.segments_df,
-        ctx.text_index,
-        ctx.image_index,
-        ctx.audio_index,
+        ctx.text_index  if use_text  else None,
+        ctx.image_index if use_image else None,
+        ctx.audio_index if use_audio else None,
         ctx.bundle,
         settings,
         top_k=top_k,
@@ -287,6 +290,9 @@ def run(
     top_k: int = 5,
     show_top: int = 3,
     merge_gap: float = 20.0,
+    use_text: bool = True,
+    use_image: bool = True,
+    use_audio: bool = True,
 ) -> pd.DataFrame:
     """
     Pretty-print the top grounding results and return the full DataFrame.
@@ -301,7 +307,8 @@ def run(
     Returns:
         Full grounding DataFrame (same as :func:`ground`).
     """
-    out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap)
+    out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap,
+                 use_text=use_text, use_image=use_image, use_audio=use_audio)
     _AGG = {"action": "max-pool", "dialogue": "mean-pool", "mixed": "mean-pool"}
 
     print("=" * 100)

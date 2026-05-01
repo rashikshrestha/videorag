@@ -31,8 +31,8 @@ from videorag.retrieval.query import (
 def hybrid_search(
     query: str,
     segments_df: pd.DataFrame,
-    text_index: faiss.IndexFlatIP,
-    image_index: faiss.IndexFlatIP,
+    text_index: Optional[faiss.IndexFlatIP],
+    image_index: Optional[faiss.IndexFlatIP],
     audio_index: Optional[faiss.IndexFlatIP],
     bundle: ModelBundle,
     settings: Settings,
@@ -73,42 +73,42 @@ def hybrid_search(
     """
     n = len(segments_df)
     qtype, alpha, beta, gamma = classify_query(query, settings)
-    q_text = embed_query_text(query, bundle)
-    q_clip = embed_query_clip(query, bundle)
+
+    q_text  = embed_query_text(query, bundle)  if text_index  is not None else None
+    q_clip  = embed_query_clip(query, bundle)  if image_index is not None else None
     q_audio = embed_query_audio(query, bundle) if audio_index is not None else None
 
-    # ── Search both indices over the full corpus ──
-    ts, ti = text_index.search(q_text, n)
-    is_, ii = image_index.search(q_clip, n)
+    # ── Search each active index over the full corpus ──
+    raw_t = np.zeros(n, dtype=np.float32)
+    if text_index is not None and q_text is not None:
+        ts, ti = text_index.search(q_text, n)
+        ts_map = dict(zip(ti[0].tolist(), ts[0].tolist()))
+        raw_t = np.array([max(0.0, ts_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
 
-    ts_map = dict(zip(ti[0].tolist(), ts[0].tolist()))
-    is_map = dict(zip(ii[0].tolist(), is_[0].tolist()))
-
-    raw_t = np.array(
-        [max(0.0, ts_map.get(i, 0.0)) for i in range(n)], dtype=np.float32
-    )
-    raw_i = np.array(
-        [max(0.0, is_map.get(i, 0.0)) for i in range(n)], dtype=np.float32
-    )
+    raw_i = np.zeros(n, dtype=np.float32)
+    if image_index is not None and q_clip is not None:
+        is_, ii = image_index.search(q_clip, n)
+        is_map = dict(zip(ii[0].tolist(), is_[0].tolist()))
+        raw_i = np.array([max(0.0, is_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
 
     raw_a = np.zeros(n, dtype=np.float32)
     if audio_index is not None and q_audio is not None:
         as_, ai = audio_index.search(q_audio, n)
         as_map = dict(zip(ai[0].tolist(), as_[0].tolist()))
-        raw_a = np.array(
-            [max(0.0, as_map.get(i, 0.0)) for i in range(n)], dtype=np.float32
-        )
+        raw_a = np.array([max(0.0, as_map.get(i, 0.0)) for i in range(n)], dtype=np.float32)
 
     norm_t = _safe_minmax(raw_t)
     norm_i = _safe_minmax(raw_i)
     norm_a = _safe_minmax(raw_a)
-    if audio_index is None or q_audio is None:
-        total = alpha + beta
-        alpha_adj = alpha / total if total > 1e-8 else 0.5
-        beta_adj = beta / total if total > 1e-8 else 0.5
-        fused = alpha_adj * norm_t + beta_adj * norm_i
-    else:
-        fused = alpha * norm_t + beta * norm_i + gamma * norm_a
+
+    # Renormalize weights over active modalities only.
+    w_t = alpha if text_index  is not None else 0.0
+    w_i = beta  if image_index is not None else 0.0
+    w_a = gamma if (audio_index is not None and q_audio is not None) else 0.0
+    total = w_t + w_i + w_a
+    if total < 1e-8:
+        total = 1.0
+    fused = (w_t / total) * norm_t + (w_i / total) * norm_i + (w_a / total) * norm_a
 
     # ── Character boost ──
     q_lower = query.lower()

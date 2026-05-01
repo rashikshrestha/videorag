@@ -126,6 +126,9 @@ def cmd_query(args: argparse.Namespace) -> None:
         top_k=args.top_k,
         show_top=args.show_top,
         merge_gap=args.merge_gap,
+        use_text=not args.no_text,
+        use_image=not args.no_image,
+        use_audio=not args.no_audio,
     )
 
 
@@ -257,6 +260,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_qry.add_argument("--top-k",    type=int,   default=10,   help="Retrieval candidates  (default: 10)")
     p_qry.add_argument("--show-top", type=int,   default=3,    help="Results to display    (default: 3)")
     p_qry.add_argument("--merge-gap", type=float, default=20.0, help="Span merge gap (s)   (default: 20.0)")
+    p_qry.add_argument("--no-text",  action="store_true", dest="no_text",  help="Disable text index during retrieval")
+    p_qry.add_argument("--no-image", action="store_true", dest="no_image", help="Disable image index during retrieval")
+    p_qry.add_argument("--no-audio", action="store_true", dest="no_audio", help="Disable audio index during retrieval")
 
     # ── evaluate ─────────────────────────────────────────────────────────
     p_ev = sub.add_parser(
