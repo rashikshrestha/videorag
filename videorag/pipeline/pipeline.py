@@ -409,6 +409,7 @@ def run(
             out,
             video_root=ctx.settings.paths.video_root,
             out_dir=gif_out,
+            query=query,
             n_frames=gif_frames,
             duration_ms=gif_duration_ms,
         )
