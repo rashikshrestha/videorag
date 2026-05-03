@@ -13,6 +13,10 @@ run(query, ctx, top_k, show_top, merge_gap) -> pd.DataFrame
 """
 from __future__ import annotations
 
+import re
+import importlib
+import shutil
+import textwrap
 from dataclasses import dataclass
 from typing import Optional
 
@@ -329,31 +333,58 @@ def run(
     out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap,
                  use_text=use_text, use_image=use_image, use_audio=use_audio,
                  use_refine=use_refine)
-    _AGG = {"action": "max-pool", "dialogue": "mean-pool", "mixed": "mean-pool"}
-
     print("=" * 100)
     print(f"QUERY: {query}")
     print("=" * 100)
+
+    terminal_width = shutil.get_terminal_size(fallback=(120, 24)).columns
+    # Reserve width for non-subtitle columns and table borders.
+    sub_wrap_width = max(24, terminal_width - 85)
+
+    def _episode_from_video(video_name: str) -> str:
+        m = re.search(r"[sS]\d+[eE](\d+)", str(video_name))
+        if not m:
+            return "?"
+        return str(int(m.group(1)))
+
+    rows = []
     for i, (_, top) in enumerate(out.head(show_top).iterrows(), 1):
-        qt  = top["query_type"]
-        agg = _AGG.get(qt, "")
-        print(
-            f"[{i}] {top['video']}  scene={int(top['scene_id'])}  "
-            f"type={qt} ({agg})"
+        scene_ts = f"{fmt(top['scene_start'])} → {fmt(top['scene_end'])}"
+        grounded_ts = f"{fmt(top['refined_start'])} → {fmt(top['refined_end'])}"
+        subtitle = str(top["subtitle"]).replace("\n", " ").strip()
+        subtitle = textwrap.fill(
+            subtitle,
+            width=sub_wrap_width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) if subtitle else ""
+        rows.append(
+            {
+                "Count": i,
+                "Confidence %": f"{float(top['confidence']) * 100:.2f}%",
+                "Scene No.": int(top["scene_id"]),
+                "Episode": _episode_from_video(str(top["video"])),
+                "Scene Timestamp": scene_ts,
+                "Grounded Timestamp": grounded_ts,
+                "Sub": subtitle,
+            }
         )
-        print(
-            f"    SCENE:    {fmt(top['scene_start'])} → {fmt(top['scene_end'])}"
-        )
-        print(
-            f"    GROUNDED: {fmt(top['refined_start'])} → {fmt(top['refined_end'])}  "
-            f"(span={top['span_seconds']:.1f}s)"
-        )
-        print(
-            f"    CONF:     {top['confidence']:.2%}  "
-            f"(ret={top['retrieval_score']:.3f} "
-            f"gnd={top['grounding_conf']:.3f} "
-            f"kw={top['keyword_bonus']:.3f})"
-        )
-        print(f"    SUB:      {str(top['subtitle'])[:200]}")
-        print("-" * 100)
+
+    table = pd.DataFrame(
+        rows,
+        columns=[
+            "Count",
+            "Confidence %",
+            "Scene No.",
+            "Episode",
+            "Scene Timestamp",
+            "Grounded Timestamp",
+            "Sub",
+        ],
+    )
+    if table.empty:
+        print("No results")
+    else:
+        tabulate = importlib.import_module("tabulate").tabulate
+        print(tabulate(table, headers="keys", tablefmt="fancy_grid", showindex=False))
     return out
