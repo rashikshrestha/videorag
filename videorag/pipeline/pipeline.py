@@ -29,6 +29,7 @@ from videorag.models.embeddings import ModelBundle
 from videorag.retrieval.query import _kw_overlap
 from videorag.retrieval.refinement import refine
 from videorag.retrieval.search import hybrid_search
+from videorag.utils.gif import save_result_gifs
 from videorag.utils.time import fmt_time
 
 
@@ -315,21 +316,29 @@ def run(
     use_image: bool = True,
     use_audio: bool = True,
     use_refine: bool = True,
+    out_dir: Optional[str] = None,
+    gif_frames: int = 10,
+    gif_duration_ms: int = 200,
 ) -> pd.DataFrame:
     """
-    Pretty-print the top grounding results and return the full DataFrame.
+    Pretty-print the top grounding results, save animated GIFs, and return the
+    full DataFrame.
 
     Args:
-        query:     Natural-language search query.
-        ctx:       Runtime :class:`VideoRAGContext`.
-        top_k:     Number of retrieval candidates.
-        show_top:  Number of results to print.
-        merge_gap: Span merging gap (seconds).
+        query:          Natural-language search query.
+        ctx:            Runtime :class:`VideoRAGContext`.
+        top_k:          Number of retrieval candidates.
+        show_top:       Number of results to print.
+        merge_gap:      Span merging gap (seconds).
+        out_dir:        Directory for output GIFs.  Defaults to
+                        ``<output_root>/gifs``.  Pass ``""`` to disable.
+        gif_frames:     Frames to sample per clip (default: 10).
+        gif_duration_ms: Milliseconds per GIF frame (default: 200).
 
     Returns:
         Full grounding DataFrame (same as :func:`ground`).
     """
-    print("\n\033[94m=============== Video Grounding ===============\033[0m") 
+    print("\n\033[94m=============== Video Grounding ===============\033[0m")
     out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap,
                  use_text=use_text, use_image=use_image, use_audio=use_audio,
                  use_refine=use_refine)
@@ -387,4 +396,21 @@ def run(
     else:
         tabulate = importlib.import_module("tabulate").tabulate
         print(tabulate(table, headers="keys", tablefmt="fancy_grid", showindex=False))
+
+    # Save one GIF per result row unless explicitly disabled (out_dir="").
+    if out_dir != "":
+        gif_out = (
+            out_dir
+            if out_dir
+            else str(ctx.settings.paths.output_root / "gifs")
+        )
+        print(f"\n[gif] Saving {len(out)} GIF(s) to: {gif_out}")
+        save_result_gifs(
+            out,
+            video_root=ctx.settings.paths.video_root,
+            out_dir=gif_out,
+            n_frames=gif_frames,
+            duration_ms=gif_duration_ms,
+        )
+
     return out
