@@ -50,6 +50,7 @@ def save_grid_gif(
     video_root: Path,
     out_dir: Path,
     query: str = "",
+    modalities: list[str] | None = None,
     n_frames: int = 10,
     duration_ms: int = 200,
     n_cols: int = 3,
@@ -142,7 +143,7 @@ def save_grid_gif(
     grid_w = actual_cols * _CELL_W + (actual_cols + 1) * _BORDER
     grid_h = _QUERY_H + n_rows * cell_h_total + (n_rows + 1) * _BORDER
 
-    query_header = _make_query_header(query, grid_w, _QUERY_H)
+    query_header = _make_query_header(query, grid_w, _QUERY_H, modalities=modalities)
 
     grid_frames: list[Image.Image] = []
     for f_idx in range(n_frames):
@@ -216,15 +217,22 @@ def _load_font(size: int) -> ImageFont.ImageFont:
         return ImageFont.load_default()
 
 
-def _make_query_header(query: str, width: int, height: int) -> Image.Image:
-    """Full-width dark-blue bar with the query text centred."""
+def _make_query_header(
+    query: str,
+    width: int,
+    height: int,
+    modalities: list[str] | None = None,
+) -> Image.Image:
+    """Full-width dark-blue bar with the query text and active modalities centred."""
     img = Image.new("RGB", (width, height), _QUERY_BG)
     draw = ImageDraw.Draw(img)
     font = _load_font(14)
-    text = f"Query: {query}" if query else "Query: —"
-    bbox = draw.textbbox((0, 0), text, font=font)
+    base = f"Query: {query}" if query else "Query: —"
+    if modalities:
+        base += f"  [modalities: {', '.join(modalities)}]"
+    bbox = draw.textbbox((0, 0), base, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(((width - tw) // 2, (height - th) // 2), text, fill=_QUERY_FG, font=font)
+    draw.text(((width - tw) // 2, (height - th) // 2), base, fill=_QUERY_FG, font=font)
     return img
 
 

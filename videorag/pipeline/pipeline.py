@@ -404,12 +404,17 @@ def run(
             if out_dir
             else str(ctx.settings.paths.output_root / "gifs")
         )
+        active_modalities = [
+            m for m, used in [("text", use_text), ("image", use_image), ("audio", use_audio)]
+            if used
+        ]
         print(f"\n[gif] Building grid GIF for {len(out)} result(s) → {gif_out}")
         save_grid_gif(
             out,
             video_root=ctx.settings.paths.video_root,
             out_dir=gif_out,
             query=query,
+            modalities=active_modalities,
             n_frames=gif_frames,
             duration_ms=gif_duration_ms,
         )
