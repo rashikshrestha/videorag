@@ -29,7 +29,7 @@ from videorag.models.embeddings import ModelBundle
 from videorag.retrieval.query import _kw_overlap
 from videorag.retrieval.refinement import refine
 from videorag.retrieval.search import hybrid_search
-from videorag.utils.gif import save_result_gifs
+from videorag.utils.gif import save_grid_gif
 from videorag.utils.time import fmt_time
 
 
@@ -397,15 +397,15 @@ def run(
         tabulate = importlib.import_module("tabulate").tabulate
         print(tabulate(table, headers="keys", tablefmt="fancy_grid", showindex=False))
 
-    # Save one GIF per result row unless explicitly disabled (out_dir="").
+    # Save a single grid GIF unless explicitly disabled (out_dir="").
     if out_dir != "":
         gif_out = (
             out_dir
             if out_dir
             else str(ctx.settings.paths.output_root / "gifs")
         )
-        print(f"\n[gif] Saving {len(out)} GIF(s) to: {gif_out}")
-        save_result_gifs(
+        print(f"\n[gif] Building grid GIF for {len(out)} result(s) → {gif_out}")
+        save_grid_gif(
             out,
             video_root=ctx.settings.paths.video_root,
             out_dir=gif_out,
