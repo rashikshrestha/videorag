@@ -339,9 +339,14 @@ def run(
         Full grounding DataFrame (same as :func:`ground`).
     """
     print("\n\033[94m=============== Video Grounding ===============\033[0m")
+    #! Grounding
     out = ground(query, ctx, top_k=top_k, merge_gap=merge_gap,
                  use_text=use_text, use_image=use_image, use_audio=use_audio,
                  use_refine=use_refine)
+
+    #! Printing Results 
+    print(out.columns.tolist())
+    exit()
     print("=" * 100)
     print(f"QUERY: {query}")
     print("=" * 100)
@@ -397,6 +402,7 @@ def run(
         tabulate = importlib.import_module("tabulate").tabulate
         print(tabulate(table, headers="keys", tablefmt="fancy_grid", showindex=False))
 
+    #! Saving GIFs
     # Save a single grid GIF unless explicitly disabled (out_dir="").
     if out_dir != "":
         gif_out = (

@@ -134,6 +134,29 @@ def cmd_query(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_query_multi(args: argparse.Namespace) -> None:
+    """Ground a single query and print results."""
+    from videorag.api import build_context
+    from videorag.pipeline.pipeline import ground
+
+    #! Build Context
+    ctx = build_context(args.config)
+
+    #! Run Grounding
+    out = ground(
+        query=args.text,
+        ctx=ctx,
+        top_k=args.top_k,
+        merge_gap=args.merge_gap,
+        use_text=not args.no_text,
+        use_image=not args.no_image,
+        use_audio=not args.no_audio,
+        use_refine=not args.no_refine,
+    )
+    print(out)
+    print('huhuhuhuhuhuhu')
+
+
 def cmd_evaluate(args: argparse.Namespace) -> None:
     """Evaluate against the built-in gold query set."""
     from videorag.api import build_context
@@ -267,6 +290,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_qry.add_argument("--no-audio",  action="store_true", dest="no_audio",  help="Disable audio index during retrieval")
     p_qry.add_argument("--no-refine", action="store_true", dest="no_refine", help="Skip temporal refinement; use raw scene boundaries")
 
+
+    # ── query-multi ────────────────────────────────────────────────────────────
+    pm_qry = sub.add_parser(
+        "query-multi",
+        help="Multiple Queries from YAML file for final testing on dataest.",
+    )
+    _config_arg(pm_qry)
+    pm_qry.add_argument(
+        "--text",
+        required=True,
+        metavar="QUERY",
+        help="Query string, e.g. 'Ross and Rachel argue about the list'",
+    )
+    pm_qry.add_argument("--top-k",    type=int,   default=10,   help="Retrieval candidates  (default: 10)")
+    pm_qry.add_argument("--show-top", type=int,   default=3,    help="Results to display    (default: 3)")
+    pm_qry.add_argument("--merge-gap", type=float, default=20.0, help="Span merge gap (s)   (default: 20.0)")
+    pm_qry.add_argument("--no-text",   action="store_true", dest="no_text",   help="Disable text index during retrieval")
+    pm_qry.add_argument("--no-image",  action="store_true", dest="no_image",  help="Disable image index during retrieval")
+    pm_qry.add_argument("--no-audio",  action="store_true", dest="no_audio",  help="Disable audio index during retrieval")
+    pm_qry.add_argument("--no-refine", action="store_true", dest="no_refine", help="Skip temporal refinement; use raw scene boundaries")
+
+
     # ── evaluate ─────────────────────────────────────────────────────────
     p_ev = sub.add_parser(
         "evaluate",
@@ -310,6 +355,7 @@ def main() -> None:
         "preprocess": cmd_preprocess,
         "index":      cmd_index,
         "query":      cmd_query,
+        "query-multi": cmd_query_multi,
         "evaluate":   cmd_evaluate,
         "run-all":    cmd_run_all,
     }
