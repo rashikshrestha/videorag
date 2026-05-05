@@ -134,27 +134,95 @@ def cmd_query(args: argparse.Namespace) -> None:
     )
 
 
+def _mmss_to_seconds(t) -> float:
+    """Convert 'M:SS' or 'MM:SS' string (or numeric) to float seconds."""
+    if isinstance(t, (int, float)):
+        return float(t)
+    parts = str(t).strip().split(":")
+    if len(parts) == 2:
+        return int(parts[0]) * 60 + float(parts[1])
+    return float(parts[0])
+
+
 def cmd_query_multi(args: argparse.Namespace) -> None:
-    """Ground a single query and print results."""
+    """Ground all queries from a YAML file and save results to JSON."""
+    import json
+    import yaml
     from videorag.api import build_context
     from videorag.pipeline.pipeline import ground
 
-    #! Build Context
+    yaml_path = Path(args.yaml)
+    if not yaml_path.exists():
+        sys.exit(f"ERROR: YAML file not found at {yaml_path}")
+
+    with yaml_path.open() as f:
+        entries = yaml.safe_load(f)
+
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    use_text  = not args.no_text
+    use_image = not args.no_image
+    use_audio = not args.no_audio
+
     ctx = build_context(args.config)
 
-    #! Run Grounding
-    out = ground(
-        query=args.text,
-        ctx=ctx,
-        top_k=args.top_k,
-        merge_gap=args.merge_gap,
-        use_text=not args.no_text,
-        use_image=not args.no_image,
-        use_audio=not args.no_audio,
-        use_refine=not args.no_refine,
-    )
-    print(out)
-    print('huhuhuhuhuhuhu')
+    all_results = []
+
+    for i, entry in enumerate(entries, 1):
+        query = entry["query"]
+        timestamps = entry.get("timestamps", [])
+        ts = timestamps[0] if timestamps else {}
+
+        gt_episode = ts.get("episode")
+        gt_start   = _mmss_to_seconds(ts["start"]) if "start" in ts else None
+        gt_end     = _mmss_to_seconds(ts["end"])   if "end"   in ts else None
+
+        print(f"\n{'='*60}")
+        print(f"Query {i}/{len(entries)}: {query}")
+        if ts:
+            print(f"Ground truth — Episode {gt_episode}  {ts.get('start')} → {ts.get('end')}")
+        print("="*60)
+
+        out = ground(
+            query=query,
+            ctx=ctx,
+            top_k=args.top_k,
+            merge_gap=args.merge_gap,
+            use_text=use_text,
+            use_image=use_image,
+            use_audio=use_audio,
+            use_refine=not args.no_refine,
+        )
+
+        print(out.to_string(index=False))
+
+        candidates = []
+        for _, row in out.iterrows():
+            candidates.append({
+                "episode":        gt_episode,
+                "global_start":   round(float(row["refined_start"]), 3),
+                "global_end":     round(float(row["refined_end"]),   3),
+                "score":          round(float(row["grounding_conf"]), 4),
+                "subtitle":       str(row["subtitle"]),
+                "modality_text":  use_text,
+                "modality_image": use_image,
+                "modality_audio": use_audio,
+            })
+
+        result = {
+            "query":               query,
+            "episode":             gt_episode,
+            "gt_start":            gt_start,
+            "gt_end":              gt_end,
+            "retrieved_candidates": candidates,
+        }
+        all_results.append(result)
+
+    with out_path.open("w") as f:
+        json.dump(all_results, f, indent=2)
+
+    print(f"\nResults saved to {out_path}")
 
 
 def cmd_evaluate(args: argparse.Namespace) -> None:
@@ -294,17 +362,22 @@ def build_parser() -> argparse.ArgumentParser:
     # ── query-multi ────────────────────────────────────────────────────────────
     pm_qry = sub.add_parser(
         "query-multi",
-        help="Multiple Queries from YAML file for final testing on dataest.",
+        help="Run all queries from a YAML file for batch evaluation.",
     )
     _config_arg(pm_qry)
     pm_qry.add_argument(
-        "--text",
+        "--yaml",
         required=True,
-        metavar="QUERY",
-        help="Query string, e.g. 'Ross and Rachel argue about the list'",
+        metavar="PATH",
+        help="Path to YAML file containing queries and ground-truth timestamps",
+    )
+    pm_qry.add_argument(
+        "--output",
+        default="data/out/results.json",
+        metavar="PATH",
+        help="Path for the output JSON file  (default: %(default)s)",
     )
     pm_qry.add_argument("--top-k",    type=int,   default=10,   help="Retrieval candidates  (default: 10)")
-    pm_qry.add_argument("--show-top", type=int,   default=3,    help="Results to display    (default: 3)")
     pm_qry.add_argument("--merge-gap", type=float, default=20.0, help="Span merge gap (s)   (default: 20.0)")
     pm_qry.add_argument("--no-text",   action="store_true", dest="no_text",   help="Disable text index during retrieval")
     pm_qry.add_argument("--no-image",  action="store_true", dest="no_image",  help="Disable image index during retrieval")
