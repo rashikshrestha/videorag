@@ -37,6 +37,9 @@ def hybrid_search(
     bundle: ModelBundle,
     settings: Settings,
     top_k: int = 10,
+    alpha: Optional[float] = None,
+    beta: Optional[float] = None,
+    gamma: Optional[float] = None,
 ) -> pd.DataFrame:
     """
     Retrieve the top-*k* candidate scenes for *query* using dual-index
@@ -72,7 +75,10 @@ def hybrid_search(
         Sorted by hybrid_score descending.
     """
     n = len(segments_df)
-    qtype, alpha, beta, gamma = classify_query(query, settings)
+    qtype, cls_alpha, cls_beta, cls_gamma = classify_query(query, settings)
+    alpha = alpha if alpha is not None else cls_alpha
+    beta  = beta  if beta  is not None else cls_beta
+    gamma = gamma if gamma is not None else cls_gamma
     print(f"Query classified as '{qtype}' with weights text(α)={alpha:.2f}, Image(β)={beta:.2f}, Audio(γ)={gamma:.2f}")
 
     #! Encode query with active encoders

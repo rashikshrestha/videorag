@@ -197,6 +197,9 @@ def ground(
     use_image: bool = True,
     use_audio: bool = True,
     use_refine: bool = True,
+    alpha: Optional[float] = None,
+    beta: Optional[float] = None,
+    gamma: Optional[float] = None,
 ) -> pd.DataFrame:
     """
     Retrieve candidate scenes, refine each to a fine-grained span, fuse
@@ -226,15 +229,20 @@ def ground(
         merge_gap = settings.retrieval.merge_gap
 
     #! Retrieval
+    # When explicit weights are given, use all indices regardless of use_* flags
+    override_weights = alpha is not None or beta is not None or gamma is not None
     retrieved = hybrid_search(
         query,
         ctx.segments_df,
-        ctx.text_index  if use_text  else None,
-        ctx.image_index if use_image else None,
-        ctx.audio_index if use_audio else None,
+        ctx.text_index  if (use_text  or override_weights) else None,
+        ctx.image_index if (use_image or override_weights) else None,
+        ctx.audio_index if (use_audio or override_weights) else None,
         ctx.bundle,
         settings,
         top_k=top_k,
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
     )
 
     #! Refinement, score fusion and calibration

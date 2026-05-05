@@ -134,6 +134,12 @@ def cmd_query(args: argparse.Namespace) -> None:
     )
 
 
+def _episode_from_video(video: str) -> int | None:
+    import re
+    m = re.search(r"[Ee](\d+)", video)
+    return int(m.group(1)) if m else None
+
+
 def _mmss_to_seconds(t) -> float:
     """Convert 'M:SS' or 'MM:SS' string (or numeric) to float seconds."""
     if isinstance(t, (int, float)):
@@ -158,30 +164,39 @@ def cmd_query_multi(args: argparse.Namespace) -> None:
     with yaml_path.open() as f:
         entries = yaml.safe_load(f)
 
-    out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     use_text  = not args.no_text
     use_image = not args.no_image
     use_audio = not args.no_audio
 
     ctx = build_context(args.config)
 
+    pl = ctx.settings.pipeline
+    alpha = args.alpha if args.alpha is not None else pl.hybrid_weight
+    beta  = args.beta  if args.beta  is not None else pl.grounding_weight
+    gamma = args.gamma if args.gamma is not None else pl.keyword_weight
+
+    out_path = yaml_path.parent / "out" / f"{yaml_path.stem}_{alpha}_{beta}_{gamma}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
     all_results = []
 
     for i, entry in enumerate(entries, 1):
         query = entry["query"]
         timestamps = entry.get("timestamps", [])
-        ts = timestamps[0] if timestamps else {}
 
-        gt_episode = ts.get("episode")
-        gt_start   = _mmss_to_seconds(ts["start"]) if "start" in ts else None
-        gt_end     = _mmss_to_seconds(ts["end"])   if "end"   in ts else None
+        ground_truth = [
+            {
+                "episode":  ts["episode"],
+                "gt_start": _mmss_to_seconds(ts["start"]),
+                "gt_end":   _mmss_to_seconds(ts["end"]),
+            }
+            for ts in timestamps
+        ]
 
         print(f"\n{'='*60}")
         print(f"Query {i}/{len(entries)}: {query}")
-        if ts:
-            print(f"Ground truth — Episode {gt_episode}  {ts.get('start')} → {ts.get('end')}")
+        for gt in ground_truth:
+            print(f"  Ground truth — Episode {gt['episode']}  {gt['gt_start']}s → {gt['gt_end']}s")
         print("="*60)
 
         out = ground(
@@ -193,14 +208,20 @@ def cmd_query_multi(args: argparse.Namespace) -> None:
             use_image=use_image,
             use_audio=use_audio,
             use_refine=not args.no_refine,
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma,
         )
 
         print(out.to_string(index=False))
 
         candidates = []
         for _, row in out.iterrows():
+            video = str(row["video"])
+            episode_name = Path(video).stem
             candidates.append({
-                "episode":        gt_episode,
+                "episode_name":   episode_name,
+                "episode":        _episode_from_video(video),
                 "global_start":   round(float(row["refined_start"]), 3),
                 "global_end":     round(float(row["refined_end"]),   3),
                 "score":          round(float(row["grounding_conf"]), 4),
@@ -211,10 +232,8 @@ def cmd_query_multi(args: argparse.Namespace) -> None:
             })
 
         result = {
-            "query":               query,
-            "episode":             gt_episode,
-            "gt_start":            gt_start,
-            "gt_end":              gt_end,
+            "query":                query,
+            "ground_truth":         ground_truth,
             "retrieved_candidates": candidates,
         }
         all_results.append(result)
@@ -371,18 +390,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Path to YAML file containing queries and ground-truth timestamps",
     )
-    pm_qry.add_argument(
-        "--output",
-        default="data/out/results.json",
-        metavar="PATH",
-        help="Path for the output JSON file  (default: %(default)s)",
-    )
     pm_qry.add_argument("--top-k",    type=int,   default=10,   help="Retrieval candidates  (default: 10)")
     pm_qry.add_argument("--merge-gap", type=float, default=20.0, help="Span merge gap (s)   (default: 20.0)")
     pm_qry.add_argument("--no-text",   action="store_true", dest="no_text",   help="Disable text index during retrieval")
     pm_qry.add_argument("--no-image",  action="store_true", dest="no_image",  help="Disable image index during retrieval")
     pm_qry.add_argument("--no-audio",  action="store_true", dest="no_audio",  help="Disable audio index during retrieval")
     pm_qry.add_argument("--no-refine", action="store_true", dest="no_refine", help="Skip temporal refinement; use raw scene boundaries")
+    pm_qry.add_argument("--alpha", type=float, default=None, metavar="W", help="hybrid_score weight (default: config value, 0.50)")
+    pm_qry.add_argument("--beta",  type=float, default=None, metavar="W", help="grounding_conf weight (default: config value, 0.40)")
+    pm_qry.add_argument("--gamma", type=float, default=None, metavar="W", help="keyword_bonus weight (default: config value, 0.10)")
 
 
     # ── evaluate ─────────────────────────────────────────────────────────
