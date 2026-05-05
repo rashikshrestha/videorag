@@ -1,5 +1,9 @@
 import csv
+from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
+
+import yaml
 
 try:
     from rapidfuzz import fuzz
@@ -34,9 +38,9 @@ def fuzzy_cluster(concepts: list[str]) -> dict[str, str]:
 
 def main():
     input_path = Path("data/queries.csv")
-    output_path = Path("data/queries_processed.csv")
+    output_path = Path("data/queries_two_concepts.yaml")
 
-    flat_rows: list[tuple[str, str, str, str]] = []
+    all_rows: list[tuple[str, str, str, list[str]]] = []
     concept_order: list[str] = []
     seen_concepts: set[str] = set()
 
@@ -47,21 +51,36 @@ def main():
             start = row["start"].strip()
             end = row["end"].strip()
             concepts = [c.strip() for c in row["concepts"].split(";") if c.strip()]
+            all_rows.append((episode, start, end, concepts))
             for concept in concepts:
-                flat_rows.append((episode, start, end, concept))
                 if concept not in seen_concepts:
                     seen_concepts.add(concept)
                     concept_order.append(concept)
 
     canonical_map = fuzzy_cluster(concept_order)
 
-    with open(output_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["concept", "episode", "start", "end"])
-        for episode, start, end, concept in flat_rows:
-            writer.writerow([canonical_map[concept], episode, start, end])
+    # For each row, generate all 2-concept combinations and group by sorted canonical pair
+    grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    total_pairs = 0
 
-    print(f"Input rows : {len(flat_rows)}")
+    for episode, start, end, concepts in all_rows:
+        canon_concepts = [canonical_map[c] for c in concepts]
+        for c1, c2 in combinations(canon_concepts, 2):
+            pair = tuple(sorted([c1, c2]))
+            grouped[pair].append({"episode": int(episode), "start": start, "end": end})
+            total_pairs += 1
+
+    records = [
+        {"query": f"{q[0]}; {q[1]}", "timestamps": ts}
+        for q, ts in grouped.items()
+    ]
+
+    with open(output_path, "w") as f:
+        yaml.dump(records, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    print(f"Input rows : {len(all_rows)}")
+    print(f"Pairs      : {total_pairs}")
+    print(f"Queries    : {len(records)}")
     print(f"Output     : {output_path}")
 
     # Report merges
