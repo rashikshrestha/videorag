@@ -1,5 +1,30 @@
 # Evaluation Metrics
 
+## Summary
+
+The following metrics are used to evaluate temporal video grounding — the task of retrieving the correct time segment(s) from a video given a natural-language query.
+
+| Metric | What it measures | Higher/Lower better |
+|--------|-----------------|---------------------|
+| **Mean IoU @ 1** | Temporal overlap between the top-ranked candidate and the nearest ground-truth segment | Higher |
+| **Mean IoU @ K** | Best temporal overlap among the top-K candidates vs any ground-truth segment | Higher |
+| **Recall @ 1 / IoU ≥ θ** | Fraction of queries where the top-ranked candidate overlaps a GT segment above threshold θ | Higher |
+| **Recall @ K / IoU ≥ θ** | Fraction of queries where any top-K candidate overlaps a GT segment above threshold θ | Higher |
+| **Precision @ K / IoU ≥ θ** | Fraction of top-K candidates (averaged over queries) that overlap a GT segment above threshold θ | Higher |
+| **Mean Center Displacement** | Average distance (seconds) between the predicted segment's center and the nearest GT center | Lower |
+
+Thresholds used: **IoU ≥ 0.3** (loose), **IoU ≥ 0.5** (standard), **IoU ≥ 0.7** (tight).
+
+Each metric is reported in two flavours:
+- **@ 1** — based on the single top-scored candidate only (strict: tests ranking quality)
+- **@ K** — based on the top-K candidates (lenient: tests whether a correct answer exists in the shortlist)
+
+If **R@K** is high but **R@1** is low, the model retrieves relevant segments but ranks them poorly.
+If **Precision@K** is low despite high **R@K**, most of the shortlist is noise and only one candidate is relevant.
+**Center Displacement** catches cases where IoU is low not because the wrong scene was found, but because the segment boundaries are slightly off.
+
+---
+
 ## IoU (Intersection over Union)
 
 IoU measures **temporal overlap** between a predicted segment and a ground-truth segment:
